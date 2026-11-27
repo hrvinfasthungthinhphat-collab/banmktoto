@@ -11981,6 +11981,18 @@ function _renderAdsTable() {
   </div>`;
 }
 
+// Tìm đơn vị theo tên trong file: khớp tên/mã, nếu không thì theo hãng xe (vd "Vinfast" → đơn vị VinFast duy nhất)
+function _adsFindStore(sv) {
+  sv = String(sv || '').trim(); if (!sv) return null;
+  const n = _adsNormText(sv);
+  const found = DB.stores.find(s => _adsNormText(s.name).includes(n) || n.includes(_adsNormText(s.name)) || (s.code && _adsNormText(s.code) === n));
+  if (found) return found;
+  try {
+    const b = typeof _brandOf === 'function' ? _brandOf({ name: sv }) : null;
+    if (b) { const same = DB.stores.filter(s => { const sb = _brandOf(s); return sb && sb.key === b.key; }); if (same.length === 1) return same[0]; }
+  } catch (e) {}
+  return null;
+}
 function _adsColumnMatchers() {
   return {
     startDate: ['ngay bat dau','bat dau','start date','startdate','from date','tu ngay','ngay chay','ngay len ads'],
@@ -12015,6 +12027,12 @@ function _detectAdsColumns(headerRow) {
   });
   if (map.startDate < 0 && map.date >= 0) map.startDate = map.date;
   if (map.endDate < 0 && map.date >= 0) map.endDate = map.date;
+  // Ưu tiên số tiền THỰC CHI (đã chạy) hơn ngân sách kế hoạch; ưu tiên DATA SĐT làm Leads
+  const _find = pats => headerRow.findIndex(hh => { const n=_adsNormText(hh); return n && pats.some(p => n.includes(p)); });
+  const spent = _find(['so tien da chay','da chay','da chi','thuc chi','chi tieu','amount spent','spend']);
+  if (spent >= 0) map.budget = spent;
+  const phone = _find(['data sdt','data so dien thoai','so dien thoai','sdt']);
+  if (phone >= 0 && !_adsNormText(headerRow[phone]).includes('chi phi')) map.leads = phone;
   return map;
 }
 
@@ -12150,7 +12168,7 @@ function _showAdsUploadPreview(headerRow, rows, colMap, fileName, headerLineNo) 
       let storeName = storeDefault ? (DB.stores.find(s=>s.id===storeDefault)?.name||storeDefault) : '—';
       if (cm.store >= 0 && row[cm.store]) {
         const sv = String(row[cm.store]||'').trim();
-        const found = DB.stores.find(s => _adsNormText(s.name).includes(_adsNormText(sv)) || _adsNormText(sv).includes(_adsNormText(s.name)) || _adsNormText(s.code) === _adsNormText(sv));
+        const found = _adsFindStore(sv);
         storeName = found ? found.name : (sv || storeName);
       }
       const metrics = _calcAdsRowMetrics({ budget, leads, impressions, coc, purchase, revenue, campaign, objective });
@@ -12218,7 +12236,7 @@ function _confirmAdsUpload() {
       const storeVal = String(row[colMap.store]||'').trim();
       storeNameRaw = storeVal;
       if (storeVal) {
-        const found = DB.stores.find(s => _adsNormText(s.name).includes(_adsNormText(storeVal)) || _adsNormText(storeVal).includes(_adsNormText(s.name)) || _adsNormText(s.code) === _adsNormText(storeVal));
+        const found = _adsFindStore(storeVal);
         if (found) storeId = found.id;
       }
     }
