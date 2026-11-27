@@ -4854,7 +4854,7 @@ function saveEditLog(logId){
 // LOG DETAIL MODAL
 // ═══════════════════════════════════════════════
 function showLogDetails(logId){
-  const l=DB.dailyLogs.find(x=>x&&String(x.id)===String(logId));
+  const l=DB.dailyLogs.find(x=>x&&String(x.id)===String(logId))||(window._schExtLogCache||{})[String(logId)];
   if(!l){toast('Không tìm thấy bản ghi!','err');return;}
 
   /* ── PHẦN 1: Thông tin chung ── */
@@ -8774,7 +8774,15 @@ function openEvaluationFromPlan(storeId,day,taskCh){openPlanReportDetail(storeId
 function findLogFromScheduleItem(scheduleId){
   const sch=(DB.schedules||[]).find(s=>String(s.id)===String(scheduleId));
   if(!sch)return null;
-  const allLogs=(DB.dailyLogs||[]).filter(Boolean);
+  // Gộp báo cáo trong bộ nhớ + báo cáo đã tải trực tiếp từ Firebase (khi khác tháng / đang lọc đơn vị khác)
+  const _seen=new Set();
+  const allLogs=[...(DB.dailyLogs||[]),...Object.values(window._schExtLogCache||{})].filter(l=>{
+    if(!l)return false;const k=String(l.id||'');if(k&&_seen.has(k))return false;if(k)_seen.add(k);return true;
+  });
+  return _matchLogForSchedule(sch,allLogs);
+}
+function _matchLogForSchedule(sch,allLogs){
+  const scheduleId=sch.id;
   if(sch.reportLogId){
     const rid=String(sch.reportLogId);
     const byId=allLogs.find(l=>String(l.id)===rid)
@@ -8798,9 +8806,35 @@ function findLogFromScheduleItem(scheduleId){
   const catLogs=logs.filter(l=>String(l.categoryId||'')===String(sch.categoryId||''));
   if(catLogs.length===1)return catLogs[0];
   const pool=catLogs.length?catLogs:logs;
+  if(pool.length===1)return pool[0];
   const scored=pool.map(l=>({l,score:_planTextScore(sch.chuDe,_planLogContent(l))})).sort((a,b)=>b.score-a.score);
   if(scored[0]&&scored[0].score>=35)return scored[0].l;
   return null;
+}
+// Tải trực tiếp báo cáo của tháng chứa lịch từ Firebase (không phụ thuộc tháng/bộ lọc đang xem)
+window._schExtLogCache=window._schExtLogCache||{};
+async function _fetchLogsForSchedule(sch){
+  const p=(sch.ngayDuKien||'').split('-');
+  const y=parseInt(p[0])||planYear, m=parseInt(p[1])||planMonth;
+  const months=[{m,y}];
+  const pa=(sch.ngayThucTe||'').split('-');
+  if(pa.length===3){const am=parseInt(pa[1]),ay=parseInt(pa[0]);if(am&&ay&&(am!==m||ay!==y))months.push({m:am,y:ay});}
+  const out=[];
+  for(const mm of months){
+    try{
+      const snap=await database.ref(`${HT_ROOT}/${MONTH_NODE}/${_mkey(mm.m,mm.y)}/dailyLogs`).once('value');
+      out.push(..._arr(snap.val()));
+    }catch(e){console.warn('[schedule-review] tải báo cáo tháng lỗi:',e?.message||e);}
+  }
+  // Dữ liệu cũ (legacy) lưu ở root/dailyLogs
+  if(!_matchLogForSchedule(sch,out)&&sch.reportLogId){
+    try{
+      const s2=await database.ref(`${HT_ROOT}/dailyLogs`).orderByChild('month').equalTo(m).once('value');
+      out.push(..._arr(s2.val()));
+    }catch(e){}
+  }
+  out.filter(Boolean).forEach(l=>{if(l.id)window._schExtLogCache[String(l.id)]=l;});
+  return _matchLogForSchedule(sch,out.filter(Boolean));
 }
 function isScheduleEvaluated(scheduleId){return getScheduleReviewStatus(scheduleId).reviewed;}
 function getScheduleReviewKey(scheduleId,month,year){ return `sch_${scheduleId}_${month}_${year}`; }
@@ -8824,9 +8858,22 @@ function scheduleEvaluationButton(scheduleId){
   const st=getScheduleReviewStatus(scheduleId);
   return `<button onclick="openEvaluationFromSchedule('${_planJs(scheduleId)}')" class="btn-evaluate-plan${st.reviewed?' reviewed':''}">${st.reviewed?'👁️ Xem lại Đánh Giá':'⭐ Đánh giá'}</button>`;
 }
-function openEvaluationFromSchedule(scheduleId){
+async function openEvaluationFromSchedule(scheduleId){
   if(!isAdmin()){toast('Chỉ Admin mới được đánh giá!','err');return;}
-  const log=findLogFromScheduleItem(scheduleId);
+  let log=findLogFromScheduleItem(scheduleId);
+  const _sch=(DB.schedules||[]).find(s=>String(s.id)===String(scheduleId));
+  // Không có trong bộ nhớ → đọc thẳng từ Firebase theo tháng của lịch
+  if(!log&&_sch){
+    try{showLoading('Đang tải báo cáo liên kết...');log=await _fetchLogsForSchedule(_sch);}
+    catch(e){console.warn(e);}
+    finally{hideLoading();}
+  }
+  const _inMem=log&&(DB.dailyLogs||[]).some(l=>l&&String(l.id)===String(log.id));
+  if(log&&!_inMem){
+    // Báo cáo thuộc tháng/bộ lọc khác: mở modal đánh giá lịch, hiển thị link từ báo cáo đã tải
+    openScheduleReviewModal(scheduleId,log);
+    return;
+  }
   if(log){
     closePlanDayModal();
     document.getElementById('log-detail-ov')?.remove();
@@ -8851,11 +8898,12 @@ function _scheduleLinksHtml(sch,log){
     ${log?`<div style="font-size:11px;color:var(--text3);margin-top:8px">👤 ${escHtml(log.staff||'—')} · 📅 ${escHtml(log.date||'')} · <a href="javascript:void(0)" onclick="document.getElementById('rv-ov')?.remove();showLogDetails('${_planJs(String(log.id))}')" style="color:var(--accent);font-weight:700">Xem chi tiết báo cáo</a></div>`:''}
   </div>`;
 }
-function openScheduleReviewModal(scheduleId){
+function openScheduleReviewModal(scheduleId,extLog){
   if(!isAdmin()){toast('Chỉ Admin mới được đánh giá!','err');return;}
   const sch=(DB.schedules||[]).find(s=>String(s.id)===String(scheduleId));
   if(!sch){toast('Không tìm thấy lịch đăng ký này!','err');return;}
   const st=getScheduleReviewStatus(scheduleId);
+  if(extLog&&!st.log)st.log=extLog;
   const existing=st.review||{};
   document.getElementById('rv-ov')?.remove();
   const rv=existing.type==='passfail'?existing:{};
