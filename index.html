@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Hung Thinh MKT v12.8.1 - Plan Replace Fixed</title>
+<title>Hưng Thịnh MKT</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -1984,6 +1984,123 @@ td.num { white-space:nowrap; }
 @media(max-width:1280px){.ads-kpi-grid{grid-template-columns:repeat(4,1fr)}}
 
 </style>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<style id="theme-clean-pro">
+/* ═══════════ THEME: CLEAN PRO (v1) – chỉ thay giao diện, không đổi logic ═══════════ */
+:root{
+  --bg:#f6f8fb;--bg2:#ffffff;--bg3:#f8fafc;--bg4:#f1f5f9;
+  --border:#e5e9f0;--border2:#d5dbe5;
+  --text:#0f172a;--text2:#475569;--text3:#94a3b8;
+  --blue:#2563eb;--green:#16a34a;--red:#dc2626;
+  --accent:#2563eb;--accent2:#1d4ed8;
+  --cta:#ea580c;--cta2:#c2410c;
+  --font:'Inter','Be Vietnam Pro',system-ui,sans-serif;
+  --mono:'Inter','Be Vietnam Pro',system-ui,sans-serif;
+  --r:8px;--r2:12px;--r3:16px;
+  --shadow:0 1px 2px rgba(15,23,42,.05);
+}
+body{font-family:var(--font);background:var(--bg);font-feature-settings:"cv11","ss01";-webkit-font-smoothing:antialiased;letter-spacing:-.005em}
+.card-val,.growth-card .gt-num,.gh-stat .v,.ads-kpi-card .v{font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+
+/* Tabler icon webfont dùng class .ti – giữ font chữ cho toast (toast cũng dùng .ti) */
+#toast .ti{font-family:var(--font)!important;font-weight:600;line-height:1.45;font-style:normal;text-transform:none;-webkit-font-smoothing:antialiased}
+i.ti{line-height:1;display:inline-block;vertical-align:-.12em;padding:0;margin:0;border:0;border-radius:0;box-shadow:none;animation:none;background:none;font-size:inherit;font-weight:normal;max-width:none;gap:0}
+
+/* ── Đăng nhập ── */
+#auth-screen{background:var(--bg)}
+.auth-box{border-radius:16px;border:1px solid var(--border);box-shadow:0 1px 2px rgba(15,23,42,.04),0 12px 32px rgba(15,23,42,.06);padding:36px}
+.auth-logo .icon{width:52px;height:52px;margin:0 auto 12px;border-radius:14px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:28px}
+.auth-logo h1{color:var(--text);font-size:19px;font-weight:700;letter-spacing:-.01em}
+.auth-logo p{color:var(--text2)}
+.auth-tabs{background:var(--bg4);border-radius:10px}
+.auth-tab{font-weight:500}
+.auth-tab.active{font-weight:600;box-shadow:0 1px 2px rgba(15,23,42,.08)}
+.auth-form label{text-transform:none;letter-spacing:0;font-size:12.5px;font-weight:600;color:var(--text2)}
+.auth-form input,.auth-form select{background:#fff;border-color:var(--border2);box-shadow:none}
+.auth-form input:focus,.auth-form select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+.auth-btn{background:var(--cta);border-radius:10px;font-weight:600}
+.auth-btn:hover{background:var(--cta2);transform:none}
+.auth-hint strong{color:var(--accent)}
+
+/* ── Sidebar ── */
+#sidebar{background:#fbfcfe;border-right:1px solid var(--border)}
+.sb-logo{border-bottom:1px solid var(--border)}
+.sb-logo h2{color:var(--text)!important;font-weight:700;letter-spacing:-.01em}
+.sb-logo p{color:var(--text3)}
+.sb-user{background:#fff;border:1px solid var(--border);box-shadow:none}
+.sb-user .u-name{color:var(--text);font-weight:600}
+.sb-month{background:#eff4ff;border:1px solid #dbe5ff;border-left:1px solid #dbe5ff;box-shadow:none}
+.sb-month::before{display:none}
+.sb-month label{color:#3b5bdb;font-weight:600;letter-spacing:.3px}
+.sb-month select{color:#1d4ed8;font-weight:600}
+.nav-sec{color:var(--text3);font-weight:600;letter-spacing:.6px;font-size:10.5px;padding:12px 12px 4px}
+.nav-item{border:none;border-left:none;color:var(--text2);font-weight:500;padding:8px 10px;margin-bottom:1px;transition:background .15s,color .15s}
+.nav-item::before{display:none}
+.nav-item:hover{background:var(--bg4);color:var(--text);transform:none;border-left-color:transparent}
+.nav-item.active{background:#eff4ff;color:#1d4ed8;font-weight:600;box-shadow:none;border:none;transform:none}
+.nav-item .ico{font-size:18px;width:22px;color:#64748b;display:inline-flex;align-items:center;justify-content:center}
+.nav-item:hover .ico{color:var(--text)}
+.nav-item.active .ico{color:#2563eb;filter:none;transform:none}
+.nav-item .nbadge{background:var(--cta);font-weight:600}
+.btn-logout{border-color:var(--border);font-weight:500}
+
+/* ── Topbar ── */
+#topbar{background:#fff;border-bottom:1px solid var(--border);box-shadow:none}
+#topbar h1{font-weight:700;letter-spacing:-.01em;font-size:16px}
+#ham-btn i.ti,#notif-bell-btn i.ti{font-size:20px}
+.role-admin{background:#fff4ec;color:var(--cta);border-color:#fed7aa}
+.role-user{background:#eff4ff;color:#1d4ed8;border-color:#dbe5ff}
+
+/* ── Thẻ số liệu & khối ── */
+.card{border:1px solid var(--border);border-radius:var(--r2);box-shadow:var(--shadow);padding:16px 18px}
+.card::before{height:3px;opacity:.9}
+.card-lbl{font-weight:600;color:#64748b;letter-spacing:.4px}
+.card-val{font-weight:700}
+.card-sub{color:var(--text3)}
+.f-card,.tbl-wrap,.growth-target-wrap{border-color:var(--border);box-shadow:var(--shadow)}
+.growth-card{background:#fff}
+.sec-t{color:var(--text);font-weight:600;letter-spacing:.3px}
+.grp-lbl{color:var(--accent);border-bottom-color:#dbe5ff;font-weight:600}
+
+/* ── Nút ── */
+.btn{font-weight:600;border-radius:8px}
+.btn-p{background:var(--cta);box-shadow:none}.btn-p:hover{background:var(--cta2);box-shadow:none}
+.btn-g{border-color:var(--border2);box-shadow:none}
+.btn-b{background:#eff4ff;color:#1d4ed8;border:1px solid #dbe5ff}.btn-b:hover{background:#dbe5ff}
+.btn-s,.btn-d{box-shadow:none}
+.btn-baocao-plan{background:var(--cta)!important}
+.btn-baocao-plan:hover{background:var(--cta2)!important}
+
+/* ── Form ── */
+.fr label{text-transform:none;letter-spacing:0;font-size:12.5px;font-weight:600;color:var(--text2)}
+.fr input,.fr select,.fr textarea,.fbar input,.fbar select{background-color:#fff;border-color:var(--border2);box-shadow:none}
+.fr input:focus,.fr select:focus,.fr textarea:focus,.fbar input:focus,.fbar select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.14)}
+.stabs{background:var(--bg4)!important}
+.stab.active{color:#1d4ed8;font-weight:600}
+
+/* ── Bảng ── */
+thead th{background:#f8fafc;color:#64748b;font-weight:600;letter-spacing:.35px;border-bottom:1px solid var(--border)}
+tbody td{border-bottom-color:#f1f5f9}
+tbody tr:hover td{background-color:#f8fafc}
+.tag{border-radius:6px;font-weight:600}
+.tb{background:#eff4ff;color:#1d4ed8}
+
+/* ── Modal ── */
+.ov{background:rgba(15,23,42,.38);backdrop-filter:blur(3px)}
+.modal{border-radius:16px;border-color:var(--border);box-shadow:0 20px 50px rgba(15,23,42,.18)}
+.modal h2{font-weight:700;letter-spacing:-.01em}
+.alert-warn{border-radius:10px}
+
+/* ── Phân trang ── */
+.pag-btn.active{background:var(--accent)!important;border-color:var(--accent)!important;color:#fff!important}
+
+/* ── Icon thay emoji ── */
+.ht-ico{font-size:1.05em;vertical-align:-.14em;line-height:1}
+th .ht-ico{font-size:1.1em}
+/* ── Thanh cuộn ── */
+::-webkit-scrollbar-thumb{background:#cbd5e1}
+</style>
 </head>
 <body>
 
@@ -1991,7 +2108,7 @@ td.num { white-space:nowrap; }
 <div id="auth-screen">
   <div class="auth-box">
     <div class="auth-logo">
-      <div class="icon">🏍️</div>
+      <div class="icon"><i class="ti ti-car" aria-hidden="true"></i></div>
       <h1>HƯNG THỊNH MKT</h1>
       <p>Hệ thống Quản lý Marketing</p>
     </div>
@@ -2055,18 +2172,18 @@ td.num { white-space:nowrap; }
       </div>
       <nav class="sb-nav" id="sb-nav"></nav>
       <div class="sb-logout">
-        <button class="btn-logout" onclick="doLogout()">🚪 Đăng xuất</button>
+        <button class="btn-logout" onclick="doLogout()"><i class="ti ti-logout" aria-hidden="true"></i> Đăng xuất</button>
       </div>
     </aside>
 
     <main id="main">
       <div id="topbar">
-        <div id="ham-btn" onclick="toggleSidebar()" title="Menu">☰</div>
+        <div id="ham-btn" onclick="toggleSidebar()" title="Menu"><i class="ti ti-menu-2" aria-hidden="true"></i></div>
         <h1 id="tb-title">Dashboard</h1>
         <div id="tb-role"></div>
         <!-- Notification Bell -->
         <button id="notif-bell-btn" onclick="toggleNotifPanel()" title="Thông báo" aria-label="Thông báo">
-          🔔<span id="notif-bell-count" style="display:none">0</span>
+          <i class="ti ti-bell" aria-hidden="true"></i><span id="notif-bell-count" style="display:none">0</span>
         </button>
         <div id="topbar-collapse" onclick="toggleTopbarCollapse()" title="Thu gọn">⊟</div>
         <button class="btn btn-g sm" onclick="syncUI()">🔄</button>
@@ -3133,24 +3250,24 @@ function buildSidebar(){
   const pending=DB.users.filter(u=>u.active===false&&u.approved!==true&&u.role!=='admin').length;
   nav.innerHTML=`
   <div class="nav-sec">Báo cáo</div>
-  <div class="nav-item active" onclick="nav('dashboard')"><span class="ico">📊</span>Dashboard</div>
-  <div class="nav-item" onclick="nav('entry')"><span class="ico">✏️</span>Nhập liệu</div>
-  <div class="nav-item" onclick="nav('history')"><span class="ico">📋</span>Đơn Vị Báo Cáo <span id="lc" class="nbadge" style="display:none">0</span></div>
-  <div class="nav-item" onclick="nav('adsreport')"><span class="ico">📈</span>Báo cáo ADS</div>
-  <div class="nav-item" onclick="nav('schedule')"><span class="ico">📅</span>Lịch đăng ký</div>
-  <div class="nav-item" onclick="nav('plan')"><span class="ico">📌</span>Kế Hoạch Nội Dung <span id="planbadge" class="nbadge" style="display:none">!</span></div>
+  <div class="nav-item active" onclick="nav('dashboard')"><span class="ico"><i class="ti ti-layout-dashboard" aria-hidden="true"></i></span>Dashboard</div>
+  <div class="nav-item" onclick="nav('entry')"><span class="ico"><i class="ti ti-pencil-plus" aria-hidden="true"></i></span>Nhập liệu</div>
+  <div class="nav-item" onclick="nav('history')"><span class="ico"><i class="ti ti-file-report" aria-hidden="true"></i></span>Đơn Vị Báo Cáo <span id="lc" class="nbadge" style="display:none">0</span></div>
+  <div class="nav-item" onclick="nav('adsreport')"><span class="ico"><i class="ti ti-chart-line" aria-hidden="true"></i></span>Báo cáo ADS</div>
+  <div class="nav-item" onclick="nav('schedule')"><span class="ico"><i class="ti ti-calendar-event" aria-hidden="true"></i></span>Lịch đăng ký</div>
+  <div class="nav-item" onclick="nav('plan')"><span class="ico"><i class="ti ti-layout-kanban" aria-hidden="true"></i></span>Kế Hoạch Nội Dung <span id="planbadge" class="nbadge" style="display:none">!</span></div>
   <div class="nav-sec">MKT Hãng</div>
-  <div class="nav-item" onclick="nav('brandcriteria')"><span class="ico">📋</span>Tiêu chí MKT hãng</div>
-  <div class="nav-item" onclick="nav('brandplan')"><span class="ico">🗓️</span>Kế hoạch MKT hãng</div>
+  <div class="nav-item" onclick="nav('brandcriteria')"><span class="ico"><i class="ti ti-list-check" aria-hidden="true"></i></span>Tiêu chí MKT hãng</div>
+  <div class="nav-item" onclick="nav('brandplan')"><span class="ico"><i class="ti ti-calendar-stats" aria-hidden="true"></i></span>Kế hoạch MKT hãng</div>
   <div class="nav-sec">Ban MKT</div>
-  <div class="nav-item" onclick="nav('deptplan')"><span class="ico">📢</span>Kế hoạch Ban MKT</div>
+  <div class="nav-item" onclick="nav('deptplan')"><span class="ico"><i class="ti ti-speakerphone" aria-hidden="true"></i></span>Kế hoạch Ban MKT</div>
   <div class="nav-sec">Quản lý</div>
-  <div class="nav-item" onclick="nav('kpi')"><span class="ico">🎯</span>Chỉ tiêu KPI</div>
-  <div class="nav-item" onclick="nav('assess')"><span class="ico">📝</span>Đánh giá Đơn vị</div>
+  <div class="nav-item" onclick="nav('kpi')"><span class="ico"><i class="ti ti-target-arrow" aria-hidden="true"></i></span>Chỉ tiêu KPI</div>
+  <div class="nav-item" onclick="nav('assess')"><span class="ico"><i class="ti ti-clipboard-check" aria-hidden="true"></i></span>Đánh giá Đơn vị</div>
   ${isAdmin()?`
-  <div class="nav-item" onclick="nav('users')"><span class="ico">👥</span>Người dùng ${pending>0?`<span class="nbadge">${pending}</span>`:''}</div>
-  <div class="nav-item" onclick="nav('config')"><span class="ico">⚙️</span>Cấu hình</div>
-  <div class="nav-item" onclick="nav('export')"><span class="ico">📤</span>Xuất báo cáo</div>`:''}`;
+  <div class="nav-item" onclick="nav('users')"><span class="ico"><i class="ti ti-users" aria-hidden="true"></i></span>Người dùng ${pending>0?`<span class="nbadge">${pending}</span>`:''}</div>
+  <div class="nav-item" onclick="nav('config')"><span class="ico"><i class="ti ti-settings" aria-hidden="true"></i></span>Cấu hình</div>
+  <div class="nav-item" onclick="nav('export')"><span class="ico"><i class="ti ti-file-export" aria-hidden="true"></i></span>Xuất báo cáo</div>`:''}`;
 }
 
 function buildMonthSelector(){
@@ -8619,7 +8736,7 @@ function _calStageStyle(stage,review){
     const fail=_reviewIsFail(review);
     return fail
       ?{bg:'#dc2626',border:'#b91c1c',color:'#fff',icon:'✖',weight:800,tag:'Không đạt'}
-      :{bg:'#4f46e5',border:'#4338ca',color:'#fff',icon:'⭐',weight:800,tag:'Đã đánh giá'};
+      :{bg:'#2563eb',border:'#1d4ed8',color:'#fff',icon:'⭐',weight:800,tag:'Đã đánh giá'};
   }
   if(stage==='reported')return{bg:'rgba(22,163,74,.16)',border:'#16a34a',color:'#15803d',icon:'✅',weight:700,tag:'Đã báo cáo'};
   return null; // chưa báo cáo: giữ màu gốc theo loại nội dung
@@ -9726,9 +9843,9 @@ function renderPlan(){
       </div>
       <div style="margin-top:8px;display:flex;flex-wrap:wrap;align-items:center;gap:10px">
         <span style="font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Trạng thái công việc:</span>
-        <span style="font-size:11px;display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;background:rgba(37,99,235,.10);border:1px solid #3b82f644;color:#1d4ed8;font-weight:700">📌 Chưa báo cáo</span>
+        <span style="font-size:11px;display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;background:#f1f5f9;border:1px solid #cbd5e1;color:#334155;font-weight:700">📌 Chưa báo cáo</span>
         <span style="font-size:11px;display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;background:rgba(22,163,74,.16);border:1px solid #16a34a;color:#15803d;font-weight:700">✅ Đã báo cáo – chờ đánh giá</span>
-        <span style="font-size:11px;display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;background:#4f46e5;border:1px solid #4338ca;color:#fff;font-weight:800">⭐ Đã đánh giá – Đạt</span>
+        <span style="font-size:11px;display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;background:#2563eb;border:1px solid #1d4ed8;color:#fff;font-weight:800">⭐ Đã đánh giá – Đạt</span>
         <span style="font-size:11px;display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;background:#dc2626;border:1px solid #b91c1c;color:#fff;font-weight:800">✖ Đã đánh giá – Không đạt</span>
       </div>
       <div style="margin-top:10px;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);border-left:3px solid var(--accent)">
@@ -11314,7 +11431,7 @@ function _renderAdsChart() {
   const leadsByDate = dateKeys.map(d => byDate[d].leads);
   const impsByDate = dateKeys.map(d => byDate[d].imps);
   const PALETTE_BG = ['#3b82f6','#0d9488','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#84cc16','#6366f1','#10b981'];
-  const PALETTE_BD = ['#2563eb','#0f766e','#d97706','#dc2626','#7c3aed','#be185d','#0f766e','#ea580c','#65a30d','#4f46e5','#059669'];
+  const PALETTE_BD = ['#2563eb','#0f766e','#d97706','#dc2626','#7c3aed','#be185d','#0f766e','#ea580c','#65a30d','#2563eb','#059669'];
 
   area.innerHTML = `
   <div class="ads-charts-row" style="margin-bottom:14px">
@@ -15940,6 +16057,74 @@ if(!window.__HT_APP_BOOTED_CONSOLIDATED__){
 
 })();
 
+</script>
+<script id="theme-clean-pro-icons">
+/* ═══ THEME CLEAN PRO – đổi emoji giao diện sang icon Tabler (chỉ hiển thị, không đổi dữ liệu) ═══ */
+(function(){
+  if(window.__HT_ICONIFY__)return; window.__HT_ICONIFY__=1;
+  const MAP={
+    '✅':'circle-check','⚠':'alert-triangle','📋':'clipboard-list','✏':'pencil','📅':'calendar','🗑':'trash','⭐':'star',
+    '➕':'plus','📊':'chart-bar','💬':'message-circle','💾':'device-floppy','👤':'user','🏪':'building-store','👥':'users',
+    '📝':'notes','🔗':'link','💰':'coin','❌':'x','🎯':'target-arrow','📈':'trending-up','🔒':'lock','📺':'device-tv',
+    '🔴':'point','📍':'map-pin','📘':'brand-facebook','🎵':'brand-tiktok','📤':'upload','📌':'pin','🏍':'car',
+    '👁':'eye','🔄':'refresh','📥':'download','💵':'cash','🔔':'bell','↩':'arrow-back-up','⏳':'hourglass','🚨':'alert-octagon',
+    '🗓':'calendar-stats','📢':'speakerphone','🔍':'search','📭':'inbox','💡':'bulb','👑':'crown','⚙':'settings',
+    '🧑‍💼':'user-check','📂':'folder','🛒':'shopping-cart','⚡':'bolt','🎨':'palette','📞':'phone','🚫':'ban','🕐':'clock',
+    '🖱':'pointer','📡':'antenna','🔧':'tool','📦':'package','⬇':'arrow-down','🔑':'key','✍':'writing','🚀':'rocket',
+    '✖':'x','📉':'trending-down','🔢':'numbers','🕒':'clock','⏰':'alarm','🎉':'confetti','ℹ':'info-circle','🏆':'trophy',
+    '💼':'briefcase','📱':'device-mobile','💳':'credit-card','🎁':'gift','⏱':'stopwatch','📩':'mail','🚗':'car','⛔':'ban',
+    '🔓':'lock-open','🔐':'lock','💸':'cash','🛠':'tool','☑':'square-check','📎':'paperclip','🛢':'droplet','🏗':'building'
+  };
+  const keys=Object.keys(MAP).sort((a,b)=>b.length-a.length).map(k=>k.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'));
+  const RE=new RegExp('('+keys.join('|')+')\\uFE0F?','gu');
+  // Chỉ xử lý vùng do ứng dụng tạo ra (tiêu đề, nhãn, nút, header bảng, thông báo…), không đụng nội dung người dùng nhập
+  const SEL=['button','.btn','label','th','h1','h2','h3','.sec-t','.grp-lbl','.card-lbl','.nav-sec','.li-label','.log-detail-section-title',
+    '.f-card h3','.growth-target-title','.gt-name','.gh-title','.alert','.empty','.notif-ico','.notif-head','.notif-tab-btn','.pm-close',
+    '.plan-done-badge','.plan-lock-badge','.badge-overdue','.dab-title','.dab-chip','.owm-content-label','.ofl-group-label','.ofl-detail-title',
+    '.assess-section-lbl','.success-title','.ads-toolbar-section','.stab','.auth-hint','.load-more-btn','.btn-logout','.role-badge',
+    '.tbl-bar','.ads-tbl-bar','.rev-detail-head','.redo-do-btn','.success-btn'].join(',');
+  const SKIP='input,textarea,select,option,script,style,#toast,[contenteditable],.log-detail-textbox,.owm-content-box,.rev-note-box,.rev-user-note';
+  function convertText(node){
+    const t=node.nodeValue; if(!t||!RE.test(t)){RE.lastIndex=0;return;} RE.lastIndex=0;
+    const frag=document.createDocumentFragment(); let last=0;
+    t.replace(RE,(m,k,off)=>{
+      if(off>last)frag.appendChild(document.createTextNode(t.slice(last,off)));
+      const base=k.replace(/️/g,''); const ic=MAP[k]||MAP[base];
+      if(ic){const i=document.createElement('i');i.className='ti ti-'+ic+' ht-ico';i.setAttribute('aria-hidden','true');frag.appendChild(i);}
+      else frag.appendChild(document.createTextNode(m));
+      last=off+m.length; return m;
+    });
+    if(last<t.length)frag.appendChild(document.createTextNode(t.slice(last)));
+    node.parentNode.replaceChild(frag,node);
+  }
+  function scanEl(el){
+    if(!el||el.nodeType!==1||el.closest(SKIP))return;
+    const w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT,{acceptNode:n=>{
+      const p=n.parentElement; if(!p||p.closest(SKIP))return NodeFilter.FILTER_REJECT;
+      return RE.test(n.nodeValue)?(RE.lastIndex=0,NodeFilter.FILTER_ACCEPT):(RE.lastIndex=0,NodeFilter.FILTER_SKIP);
+    }});
+    const list=[];while(w.nextNode())list.push(w.currentNode);
+    list.forEach(convertText);
+  }
+  function scan(root){
+    try{
+      if(root.nodeType===1&&root.matches&&root.matches(SEL))scanEl(root);
+      (root.querySelectorAll?root.querySelectorAll(SEL):[]).forEach(scanEl);
+      if(root.nodeType===1){const up=root.closest&&root.closest(SEL);if(up&&up!==root)scanEl(up);}
+    }catch(e){}
+  }
+  let pending=new Set(),raf=0;
+  function flush(){raf=0;const arr=[...pending];pending.clear();arr.forEach(n=>{if(n.isConnected)scan(n);});}
+  const obs=new MutationObserver(ms=>{
+    ms.forEach(m=>{
+      if(m.type==='characterData'){if(m.target.parentElement)pending.add(m.target.parentElement);}
+      else m.addedNodes.forEach(n=>{if(n.nodeType===1)pending.add(n);else if(n.nodeType===3&&n.parentElement)pending.add(n.parentElement);});
+    });
+    if(!raf)raf=requestAnimationFrame(flush);
+  });
+  function start(){scan(document.body);obs.observe(document.body,{childList:true,subtree:true,characterData:true});}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
+})();
 </script>
 </body>
 </html>
