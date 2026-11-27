@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Hưng Thịnh MKT</title>
+<title>BAN MKT Ô TÔ</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -2113,7 +2113,7 @@ th .ht-ico{font-size:1.1em}
   <div class="auth-box">
     <div class="auth-logo">
       <div class="icon"><i class="ti ti-car" aria-hidden="true"></i></div>
-      <h1>HƯNG THỊNH MKT</h1>
+      <h1>BAN MKT Ô TÔ</h1>
       <p>Hệ thống Quản lý Marketing</p>
     </div>
     <div class="auth-tabs">
@@ -4576,7 +4576,7 @@ function exportDataExcel(){
 
       // ── META: dòng tiêu đề thông tin xuất file ──
       const META=[
-        `BÁO CÁO MARKETING – Tháng ${m}/${y} – HƯNG THỊNH XE MÁY`,
+        `BÁO CÁO MARKETING – Tháng ${m}/${y} – BAN MKT Ô TÔ`,
         `Phạm vi: ${scopeDesc}`,
         `Xuất bởi: ${curUser?.name||curUser?.username||'—'} | Thời gian: ${new Date().toLocaleString('vi-VN')}`,
         `Tổng bản ghi: ${logs.length}`,
@@ -5937,7 +5937,7 @@ function renderExport(){
 function exportDash(){
   const m=curMonth,y=curYear;
   const rows=[
-    [`BÁO CÁO MARKETING TỔNG HỢP – THÁNG ${m}/${y} – HƯNG THỊNH XE MÁY`],
+    [`BÁO CÁO MARKETING TỔNG HỢP – THÁNG ${m}/${y} – BAN MKT Ô TÔ`],
     [`Xuất: ${new Date().toLocaleString('vi-VN')} | Kỳ vọng: ${exPct()}%`],[],
     ['STT','CH','Khu vực','FB LK','FB CT','FB%','TT LK','TT CT','TT%','Live LK','Live CT','Live%','KHTN LK','KHTN CT','KHTN%','Ads','Trạng thái']
   ];
@@ -8910,6 +8910,39 @@ function _planExtraEnsure(m,y){
     try{ if(document.getElementById('p-plan')?.classList.contains('active')&&parseInt(planMonth)===m&&parseInt(planYear)===y) renderPlan(); }catch(e){}
   }).catch(()=>{ delete _planExtraLoaded[k]; });
 }
+// Thành viên: tải đánh giá lịch đăng ký (khóa sch_…) của đơn vị mình – vì bộ tải theo đơn vị chỉ lấy khóa bắt đầu bằng mã đơn vị
+const _schReviewLoadedAt={};
+function _memberSchReviewsEnsure(m,y){
+  try{
+    if(typeof isAdmin==='function'&&isAdmin())return;
+    if(typeof database==='undefined')return;
+    const sid=String((curUser&&curUser.storeId)||'');
+    m=parseInt(m);y=parseInt(y);
+    if(!sid||!m||!y)return;
+    const k=_mkey(m,y);
+    const last=_schReviewLoadedAt[k];
+    if(last==='loading'||(last&&Date.now()-last<30000))return;
+    _schReviewLoadedAt[k]='loading';
+    const ref=database.ref(`${HT_ROOT}/${MONTH_NODE}/${k}/planReviews`);
+    ref.orderByKey().startAt('sch_').endAt('sch_').once('value')
+      .catch(()=>ref.once('value'))
+      .then(snap=>{
+        const all=_obj(snap&&snap.val?snap.val():null);
+        let changed=false;
+        if(!window._extPlanReviews)window._extPlanReviews={};
+        Object.entries(all).forEach(([key,v])=>{
+          if(!String(key).startsWith('sch_')||!v||String(v.storeId||'')!==sid)return;
+          if(JSON.stringify(window._extPlanReviews[key])!==JSON.stringify(v)){window._extPlanReviews[key]=v;changed=true;}
+        });
+        _schReviewLoadedAt[k]=Date.now();
+        if(changed){
+          try{ if(document.getElementById('p-plan')?.classList.contains('active'))renderPlan(); }catch(e){}
+          try{ if(document.getElementById('p-schedule')?.classList.contains('active')&&typeof renderSchedule==='function')renderSchedule(); }catch(e){}
+        }
+      })
+      .catch(e=>{ delete _schReviewLoadedAt[k]; console.warn('Tải đánh giá lịch lỗi:',e); });
+  }catch(e){}
+}
 function _planReviewLookup(key){
   const a=(DB.planReviews||{})[key];
   if(a&&Object.keys(a).length)return a;
@@ -9855,6 +9888,7 @@ function brandLogoHtml(store,size){
 
 function renderPlan(){
   try{ _planExtraEnsure(planMonth,planYear); }catch(e){}
+  try{ _memberSchReviewsEnsure(planMonth,planYear); }catch(e){}
   if(!DB.planCompletion)DB.planCompletion={};
   if(!DB.planTargets)DB.planTargets={};
   if(!DB.masterPlans)DB.masterPlans={};
@@ -11126,7 +11160,7 @@ function downloadPlanTemplate(){
 
     // ── 7. Sheet 2: Hướng dẫn ────────────────────────────────────────────
     const guideData=[
-      ['📋 HƯỚNG DẪN ĐIỀN FILE KẾ HOẠCH NỘI DUNG – HƯNG THỊNH MKT'],
+      ['📋 HƯỚNG DẪN ĐIỀN FILE KẾ HOẠCH NỘI DUNG – BAN MKT Ô TÔ'],
       [''],
       ['CỘT','TÊN CỘT','YÊU CẦU ĐỊNH DẠNG','GIÁ TRỊ HỢP LỆ / VÍ DỤ'],
       ['A','Ngày','Bắt buộc. Định dạng DD/MM/YYYY hoặc số 1–31',`01/${mStr}/${yStr}  hoặc  1`],
@@ -12652,7 +12686,7 @@ function exportAdsExcel() {
   const today = new Date();
   const dateStr = `${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}`;
   const kpiRows = [
-    ['📊 BÁO CÁO HIỆU QUẢ ADS – HƯNG THỊNH', '', '', '', ''],
+    ['📊 BÁO CÁO HIỆU QUẢ ADS – BAN MKT Ô TÔ', '', '', '', ''],
     [`Tháng: ${_adsRF.month}/${_adsRF.year}`, `Cửa hàng: ${filterLabel}`, `Xuất: ${today.toLocaleDateString('vi-VN')}`, '', ''],
     [],
     ['CHỈ SỐ KPI', 'GIÁ TRỊ', 'ĐƠN VỊ', 'GHI CHÚ', ''],
@@ -14755,8 +14789,10 @@ if (_overdueOv) {
   function filterPayloadForStore(payload, sid, m, y){
     payload = payload || {}; const lk=lkey(m,y);
     const out={}; ROW_CHILDREN.forEach(k=>out[k]=rowsByStore(payload[k],sid));
-    out.planCompletion = keysByStore(payload.planCompletion,sid);
-    out.planReviews = keysByStore(payload.planReviews,sid);
+    // Admin giữ toàn bộ đánh giá/hoàn thành (mọi đơn vị); thành viên lấy khóa của mình + đánh giá lịch sch_… thuộc đơn vị mình
+    out.planCompletion = admin() ? {...obj(payload.planCompletion)} : keysByStore(payload.planCompletion,sid);
+    out.planReviews = admin() ? {...obj(payload.planReviews)} : keysByStore(payload.planReviews,sid);
+    if(!admin()) Object.entries(obj(payload.planReviews)).forEach(([k,v])=>{ if(String(k).startsWith('sch_') && v && String(v.storeId||'')===String(sid)) out.planReviews[k]=v; });
     out.planTargets = {};
     const pt=obj(payload.planTargets);
     Object.keys(pt).forEach(k=>{ if(String(k).startsWith(`${sid}_`)) out.planTargets[k]=pt[k]; });
@@ -14914,6 +14950,12 @@ if (_overdueOv) {
     Object.entries(keysByStore(local.planReviews,sid)).forEach(([k,v])=>updates[`planReviews/${safeKey(k)}`]=v);
     markRemovedKeys(updates,'planCompletion',prev.planCompletion,local.planCompletion,sid);
     markRemovedKeys(updates,'planReviews',prev.planReviews,local.planReviews,sid);
+    // Admin đang lọc 1 đơn vị: vẫn ghi mọi đánh giá/hoàn thành của tháng (đánh giá lịch sch_…, đơn vị khác) – chỉ update theo khóa, không xoá
+    if(admin()){
+      ['planCompletion','planReviews'].forEach(child=>{
+        Object.entries(obj(local[child])).forEach(([k,v])=>{ const p=`${child}/${safeKey(k)}`; if(!(p in updates)) updates[p]=v; });
+      });
+    }
     if(local.planTargets && local.planTargets[lk] && local.planTargets[lk][sid] !== undefined) updates[`planTargets/${lk}/${sid}`]=local.planTargets[lk][sid];
     if(local.masterPlans && local.masterPlans[lk] && local.masterPlans[lk][sid] !== undefined) updates[`masterPlans/${lk}/${sid}`]=local.masterPlans[lk][sid];
     // Ghi schedules của store này vào MONTH_NODE để nhân sự đọc được khi reload
