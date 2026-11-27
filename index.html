@@ -16430,6 +16430,262 @@ if(!window.__HT_APP_BOOTED_CONSOLIDATED__){
 })();
 
 </script>
+<script id="ads-monthly-tracker">
+/* ═══ THEO DÕI ADS HÀNG THÁNG – bảng đơn giản theo mẫu Google Sheet (thay cho báo cáo ADS + biểu đồ) ═══
+   Mỗi đơn vị 1 dòng / tháng, lưu tại months/{YYYY_MM}/adsReports/adsm_{storeId}_{m}_{y}
+   Admin sửa trực tiếp trên bảng; thành viên chỉ xem đơn vị mình. */
+(function(){
+  if(window.__ADS_MONTHLY__)return; window.__ADS_MONTHLY__=1;
+  const S={month:null,year:null,key:'',rows:{},asOf:'',loading:false,dirty:false,imported:false};
+  window._adsM=S;
+  const FIELDS=['budgetPlan','budget','startDate','endDate','campaignType','messages','leads','coc'];
+  const NUMS=['budgetPlan','budget','messages','leads','coc'];
+  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const num=v=>{ if(typeof v==='number')return isFinite(v)?Math.round(v):0; const d=String(v??'').replace(/[^\d\-]/g,''); return d?parseInt(d,10)||0:0; };
+  const fmt=n=>n?Number(n).toLocaleString('vi-VN'):'';
+  const pad=n=>String(n).padStart(2,'0');
+  const rowId=(sid,m,y)=>`adsm_${String(sid).replace(/[.#$\[\]\/]/g,'_')}_${m}_${y}`;
+  const mk=(m,y)=>_mkey(m,y);
+  const lastDay=(m,y)=>new Date(y,m,0).getDate();
+  const toIso=v=>{
+    if(v===null||v===undefined||v==='')return '';
+    if(typeof v==='number'&&isFinite(v)){ const d=new Date(Date.UTC(1899,11,30)+Math.round(v)*86400000); return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`; }
+    if(v instanceof Date&&!isNaN(v))return `${v.getFullYear()}-${pad(v.getMonth()+1)}-${pad(v.getDate())}`;
+    const s=String(v).trim(); let m;
+    if((m=s.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/)))return `${m[1]}-${pad(m[2])}-${pad(m[3])}`;
+    if((m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/)))return `${m[3].length===2?'20'+m[3]:m[3]}-${pad(m[2])}-${pad(m[1])}`;
+    return '';
+  };
+  const viDate=iso=>{ const m=String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m?`${m[3]}/${m[2]}/${m[1]}`:''; };
+  const stores=()=>{ const l=(typeof myStores==='function'?myStores():DB.stores)||[]; return typeof sortStoresByBrand==='function'?sortStoresByBrand(l):l; };
+  const blank=(sid)=>({storeId:sid,budgetPlan:0,budget:0,startDate:`${S.year}-${pad(S.month)}-01`,endDate:`${S.year}-${pad(S.month)}-${pad(lastDay(S.month,S.year))}`,campaignType:'Message Ads',messages:0,leads:0,coc:0,_new:true});
+  const hasData=r=>r&&NUMS.some(f=>num(r[f])>0);
+
+  async function load(force){
+    const k=mk(S.month,S.year);
+    if(!force&&S.key===k)return;
+    S.loading=true; S.key=k; S.rows={}; S.asOf=''; S.dirty=false; S.imported=false;
+    try{
+      const ref=database.ref(`${HT_ROOT}/${MONTH_NODE}/${k}/adsReports`);
+      let snap;
+      if(isAdmin()) snap=await ref.once('value');
+      else snap=await ref.orderByChild('storeId').equalTo(String(curUser?.storeId||'')).once('value');
+      const all=_obj(snap.val());
+      Object.values(all).forEach(r=>{ if(r&&r._monthly&&r.storeId&&parseInt(r.month)===S.month&&parseInt(r.year)===S.year) S.rows[r.storeId]={...r}; });
+      try{ const a=await database.ref(`${HT_ROOT}/${MONTH_NODE}/${k}/adsMeta/asOf`).once('value'); S.asOf=a.val()||''; }catch(e){}
+    }catch(e){ console.warn('Tải ADS tháng lỗi:',e); toast('Không tải được dữ liệu ADS tháng '+S.month+'/'+S.year,'err'); }
+    S.loading=false;
+  }
+  function rowOf(sid){ return S.rows[sid]||(S.rows[sid]=blank(sid)); }
+  function cpl(r){ const l=num(r.leads); return l>0?Math.round(num(r.budget)/l):0; }
+  function totals(){
+    const t={budgetPlan:0,budget:0,messages:0,leads:0,coc:0};
+    stores().forEach(s=>{ const r=S.rows[s.id]; if(r)Object.keys(t).forEach(f=>t[f]+=num(r[f])); });
+    return t;
+  }
+
+  window._adsMInput=function(sid,field,el){
+    const r=rowOf(sid); r[field]=NUMS.includes(field)?num(el.value):el.value; S.dirty=true;
+    const c=document.getElementById('adsm-cpl-'+sid); if(c)c.textContent=cpl(r)?fmt(cpl(r))+' đ':'—';
+    const sp=document.getElementById('adsm-spent-'+sid);
+    if(sp){ const over=num(r.budgetPlan)>0&&num(r.budget)>num(r.budgetPlan); sp.style.background=over?'#fee2e2':''; sp.style.color=over?'#b91c1c':''; }
+    const t=totals(); Object.keys(t).forEach(f=>{ const e=document.getElementById('adsm-t-'+f); if(e)e.textContent=fmt(t[f])||'0'; });
+    const tc=document.getElementById('adsm-t-cpl'); if(tc)tc.textContent=t.leads?fmt(Math.round(t.budget/t.leads))+' đ':'—';
+    const sb=document.getElementById('adsm-save'); if(sb)sb.classList.add('pulse');
+  };
+  window._adsMFmt=function(el){ const n=num(el.value); el.value=n?fmt(n):''; };
+  window._adsMMonth=async function(m,y){
+    if(S.dirty&&!confirm('Có số liệu chưa lưu. Bỏ qua và chuyển tháng?'))return renderAdsReport();
+    S.month=parseInt(m)||S.month; S.year=parseInt(y)||S.year; S.key=''; renderAdsReport();
+  };
+
+  window._adsMSave=async function(){
+    if(!isAdmin()){toast('Chỉ Admin mới được sửa số liệu ADS!','err');return;}
+    const k=mk(S.month,S.year), upd={}, now=Date.now(), by=curUser?.name||curUser?.email||'admin';
+    const asOfEl=document.getElementById('adsm-asof'); if(asOfEl)S.asOf=asOfEl.value||'';
+    let n=0;
+    stores().forEach(s=>{
+      const r=S.rows[s.id]; if(!r)return;
+      const id=rowId(s.id,S.month,S.year);
+      if(!hasData(r)&&r._new)return;
+      const rec={id,_monthly:true,storeId:s.id,storeName:s.name,month:S.month,year:S.year,
+        startDate:toIso(r.startDate)||`${S.year}-${pad(S.month)}-01`,endDate:toIso(r.endDate)||`${S.year}-${pad(S.month)}-${pad(lastDay(S.month,S.year))}`,
+        campaignType:String(r.campaignType||'').trim(),budgetPlan:num(r.budgetPlan),budget:num(r.budget),messages:num(r.messages),leads:num(r.leads),coc:num(r.coc),
+        purchase:0,revenue:0,impressions:0,clicks:0,objective:'Tin nhắn (LEAD)',updatedAt:now,updatedBy:by,createdAt:r.createdAt||now};
+      rec.date=rec.startDate; rec.campaign=(rec.campaignType||'ADS')+' (tổng tháng)';
+      upd[id]=rec; S.rows[s.id]={...rec}; n++;
+    });
+    showLoading('Đang lưu số liệu ADS...');
+    try{
+      if(Object.keys(upd).length) await database.ref(`${HT_ROOT}/${MONTH_NODE}/${k}/adsReports`).update(sanitizeForFirebase(upd));
+      await database.ref(`${HT_ROOT}/${MONTH_NODE}/${k}/adsMeta`).update({asOf:S.asOf||'',updatedAt:now,updatedBy:by});
+      // Đồng bộ vào bộ nhớ nếu đang là tháng báo cáo hiện tại (để lần lưu chung sau không làm mất)
+      if(S.month===parseInt(curMonth)&&S.year===parseInt(curYear)){
+        if(!Array.isArray(DB.adsReports))DB.adsReports=_arr(DB.adsReports);
+        Object.values(upd).forEach(rec=>{ const i=DB.adsReports.findIndex(x=>x&&String(x.id)===rec.id); if(i>=0)DB.adsReports[i]=rec; else DB.adsReports.push(rec); });
+      }
+      S.dirty=false; S.imported=false;
+      toast(`✅ Đã lưu số liệu ADS tháng ${S.month}/${S.year} (${n} đơn vị)`,'ok');
+    }catch(e){ console.error(e); toast('⚠️ Lưu thất bại: '+(e?.message||''),'err'); }
+    finally{ hideLoading(); }
+    renderAdsReport();
+  };
+
+  window._adsMClear=async function(sid){
+    if(!isAdmin())return;
+    const s=(DB.stores||[]).find(x=>x.id===sid);
+    if(!confirm(`Xoá số liệu ADS tháng ${S.month}/${S.year} của ${s?.name||sid}?`))return;
+    const id=rowId(sid,S.month,S.year);
+    try{
+      await database.ref(`${HT_ROOT}/${MONTH_NODE}/${mk(S.month,S.year)}/adsReports/${id}`).remove();
+      if(Array.isArray(DB.adsReports))DB.adsReports=DB.adsReports.filter(x=>!(x&&String(x.id)===id));
+      delete S.rows[sid]; toast('Đã xoá dòng ADS','ok');
+    }catch(e){ toast('⚠️ Xoá thất bại: '+(e?.message||''),'err'); }
+    renderAdsReport();
+  };
+
+  // ── Nhập từ file Excel tải về từ Google Sheet (đúng mẫu "Theo dõi ADS tháng") ──
+  window._adsMImport=function(ev){
+    const file=ev.target.files[0]; ev.target.value=''; if(!file)return;
+    const rd=new FileReader();
+    rd.onload=e=>{
+      try{
+        const wb=XLSX.read(e.target.result,{type:'array'});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});
+        const N=v=>_adsNormText(v);
+        let hi=-1;
+        for(let i=0;i<Math.min(raw.length,15);i++){ const r=(raw[i]||[]).map(N); if(r.some(c=>c.includes('don vi')||c.includes('cua hang'))&&r.some(c=>c.includes('ngan sach')||c.includes('da chay')))
+          {hi=i;break;} }
+        if(hi<0){toast('Không tìm thấy dòng tiêu đề (cần có cột ĐƠN VỊ và NGÂN SÁCH / SỐ TIỀN ĐÃ CHẠY)','err');return;}
+        const H=(raw[hi]||[]).map(N);
+        const col=(inc,exc)=>H.findIndex(h=>h&&inc.some(p=>h.includes(p))&&!(exc||[]).some(p=>h.includes(p)));
+        const C={store:col(['don vi','cua hang']),budget:col(['da chay','da chi','thuc chi','chi tieu']),budgetPlan:col(['ngan sach'],['da chay']),
+          startDate:col(['bat dau']),endDate:col(['ket thuc']),campaignType:col(['loai chien dich','chien dich']),
+          messages:col(['tin nhan']),leads:col(['data','sdt','so dien thoai'],['chi phi']),coc:col(['coc','chuyen doi xe'])};
+        // Dòng "(Số liệu được tính đến hết ngày dd/mm/yyyy)"
+        for(let i=0;i<hi;i++){ const t=(raw[i]||[]).join(' '); const m=t.match(/(\d{1,2}\/\d{1,2}\/\d{4})/); if(m&&/tinh den|tính đến/i.test(t)){ S.asOf=toIso(m[1]); break; } }
+        let ok=0; const miss=[];
+        raw.slice(hi+1).forEach(r=>{
+          const sv=C.store>=0?String(r[C.store]||'').trim():''; if(!sv)return;
+          const s=_adsFindStore(sv); if(!s){ if(!/truong ban|tong|cong/.test(N(sv)))miss.push(sv); return; }
+          const row=rowOf(s.id);
+          ['budgetPlan','budget','messages','leads','coc'].forEach(f=>{ if(C[f]>=0)row[f]=num(r[C[f]]); });
+          if(C.startDate>=0&&toIso(r[C.startDate]))row.startDate=toIso(r[C.startDate]);
+          if(C.endDate>=0&&toIso(r[C.endDate]))row.endDate=toIso(r[C.endDate]);
+          if(C.campaignType>=0&&String(r[C.campaignType]||'').trim())row.campaignType=String(r[C.campaignType]).trim();
+          ok++;
+        });
+        S.dirty=ok>0; S.imported=ok>0;
+        renderAdsReport();
+        toast(ok?`Đã đọc ${ok} đơn vị từ file. Kiểm tra lại rồi bấm "Lưu số liệu".`:'Không đọc được dòng nào từ file','warn');
+        if(miss.length)setTimeout(()=>toast('Không khớp đơn vị: '+miss.join(', '),'warn'),1500);
+      }catch(err){ console.error(err); toast('Lỗi đọc file: '+err.message,'err'); }
+    };
+    rd.readAsArrayBuffer(file);
+  };
+
+  window._adsMExport=function(){
+    const m=S.month,y=S.year,t=totals();
+    const aoa=[[`THEO DÕI ADS THÁNG ${m}/${y} BAN MKT Ô TÔ`],[S.asOf?`(Số liệu được tính đến hết ngày ${viDate(S.asOf)})`:''],[],
+      ['STT','ĐƠN VỊ','NGÂN SÁCH/THÁNG','SỐ TIỀN ĐÃ CHẠY','NGÀY BẮT ĐẦU','NGÀY KẾT THÚC','LOẠI CHIẾN DỊCH','TIN NHẮN','DATA SDT','CHI PHÍ/SDT','CHUYỂN ĐỔI XE KÝ CỌC']];
+    stores().forEach((s,i)=>{ const r=S.rows[s.id]||blank(s.id);
+      aoa.push([i+1,s.name,num(r.budgetPlan),num(r.budget),viDate(toIso(r.startDate)),viDate(toIso(r.endDate)),r.campaignType||'',num(r.messages),num(r.leads),cpl(r),num(r.coc)]); });
+    aoa.push(['','TỔNG CỘNG',t.budgetPlan,t.budget,'','','',t.messages,t.leads,t.leads?Math.round(t.budget/t.leads):0,t.coc]);
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols']=[{wch:5},{wch:30},{wch:16},{wch:16},{wch:13},{wch:13},{wch:16},{wch:10},{wch:10},{wch:13},{wch:14}];
+    ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:10}},{s:{r:1,c:0},e:{r:1,c:10}}];
+    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,`ADS T${m}-${y}`);
+    XLSX.writeFile(wb,`Theo_doi_ADS_T${m}_${y}.xlsx`);
+  };
+
+  const _legacy=typeof renderAdsReport==='function'?renderAdsReport:null;
+  window._renderAdsReportLegacy=_legacy;
+  renderAdsReport=function(){
+    const el=document.getElementById('p-adsreport'); if(!el)return;
+    if(!S.month){ S.month=parseInt(curMonth)||new Date().getMonth()+1; S.year=parseInt(curYear)||new Date().getFullYear(); }
+    const k=mk(S.month,S.year);
+    if(S.key!==k&&!S.loading){
+      el.innerHTML=`<div class="card" style="padding:40px;text-align:center;color:var(--text3)">Đang tải số liệu ADS tháng ${S.month}/${S.year}...</div>`;
+      load().then(()=>renderAdsReport()); return;
+    }
+    if(S.loading)return;
+    const adm=isAdmin(), list=stores(), t=totals();
+    const inp=(sid,f,val,w,align,type)=>adm
+      ?`<input ${type==='date'?'type="date"':'type="text" inputmode="numeric"'} value="${esc(type==='date'?toIso(val):(type==='text'?val:fmt(num(val))))}" oninput="_adsMInput('${sid}','${f}',this)" ${type==='num'?'onblur="_adsMFmt(this)"':''} style="width:${w};text-align:${align||'right'};padding:6px 8px;border:1px solid var(--border2);border-radius:7px;font:inherit;font-size:13px;background:#fff;color:var(--text)">`
+      :`<span>${type==='date'?viDate(toIso(val)):(type==='text'?esc(val||''):(fmt(num(val))||'0'))}</span>`;
+    const body=list.map((s,i)=>{
+      const r=S.rows[s.id]||(adm?rowOf(s.id):blank(s.id));
+      const over=num(r.budgetPlan)>0&&num(r.budget)>num(r.budgetPlan);
+      const c=cpl(r);
+      return `<tr>
+        <td style="text-align:center;color:var(--text3)">${i+1}</td>
+        <td><div style="display:flex;align-items:center;gap:8px;min-width:170px">${typeof brandLogoHtml==='function'?brandLogoHtml(s,26):''}<span style="font-weight:600">${esc(s.name)}</span></div></td>
+        <td style="background:rgba(22,163,74,.06)">${inp(s.id,'budgetPlan',r.budgetPlan,'120px','right','num')}</td>
+        <td id="adsm-spent-${s.id}" style="${over?'background:#fee2e2;color:#b91c1c':'background:rgba(220,38,38,.05)'}">${inp(s.id,'budget',r.budget,'120px','right','num')}</td>
+        <td>${inp(s.id,'startDate',r.startDate,'135px','left','date')}</td>
+        <td>${inp(s.id,'endDate',r.endDate,'135px','left','date')}</td>
+        <td>${inp(s.id,'campaignType',r.campaignType,'120px','left','text')}</td>
+        <td style="background:rgba(22,163,74,.06)">${inp(s.id,'messages',r.messages,'70px','right','num')}</td>
+        <td style="background:rgba(22,163,74,.06)">${inp(s.id,'leads',r.leads,'70px','right','num')}</td>
+        <td id="adsm-cpl-${s.id}" style="text-align:right;font-weight:600;background:rgba(22,163,74,.06)">${c?fmt(c)+' đ':'—'}</td>
+        <td style="text-align:center;font-weight:700">${inp(s.id,'coc',r.coc,'60px','center','num')}</td>
+        ${adm?`<td style="text-align:center">${S.rows[s.id]&&!S.rows[s.id]._new?`<button class="btn btn-g sm" title="Xoá số liệu tháng này" onclick="_adsMClear('${s.id}')" style="padding:4px 8px"><i class="ti ti-trash" aria-hidden="true"></i></button>`:''}</td>`:''}
+      </tr>`;
+    }).join('');
+    el.innerHTML=`
+    <style>
+      #adsm-tbl{width:100%;border-collapse:collapse;font-size:13px}
+      #adsm-tbl th{background:#fef3c7;color:#0f172a;font-weight:700;font-size:11.5px;text-transform:uppercase;letter-spacing:.2px;padding:9px 8px;border:1px solid #e5e7eb;text-align:center;line-height:1.3}
+      #adsm-tbl td{padding:6px 8px;border:1px solid #eef0f4;vertical-align:middle;white-space:nowrap}
+      #adsm-tbl tfoot td{background:#f1f5f9;font-weight:800}
+      #adsm-save.pulse{box-shadow:0 0 0 3px rgba(234,88,12,.25)}
+    </style>
+    <div class="card" style="padding:16px 18px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:240px">
+          <div style="font-size:17px;font-weight:800;color:var(--text)">Theo dõi ADS tháng ${S.month}/${S.year} – Ban MKT ô tô</div>
+          <div style="font-size:12.5px;color:var(--text2);margin-top:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">Số liệu được tính đến hết ngày
+            ${adm?`<input id="adsm-asof" type="date" value="${esc(S.asOf)}" oninput="window._adsM.asOf=this.value;window._adsM.dirty=true" style="padding:3px 6px;border:1px solid var(--border2);border-radius:6px;font:inherit;font-size:12.5px">`:`<b>${viDate(S.asOf)||'—'}</b>`}
+          </div>
+        </div>
+        <select onchange="_adsMMonth(this.value,null)" style="padding:7px 10px;border:1px solid var(--border2);border-radius:8px;font:inherit;font-weight:600">${Array.from({length:12},(_,i)=>`<option value="${i+1}"${i+1===S.month?' selected':''}>Tháng ${i+1}</option>`).join('')}</select>
+        <select onchange="_adsMMonth(null,this.value)" style="padding:7px 10px;border:1px solid var(--border2);border-radius:8px;font:inherit;font-weight:600">${[2025,2026,2027].map(y=>`<option value="${y}"${y===S.year?' selected':''}>${y}</option>`).join('')}</select>
+        ${adm?`<input type="file" id="adsm-file" accept=".xlsx,.xls" style="display:none" onchange="_adsMImport(event)">
+        <button class="btn btn-b sm" onclick="document.getElementById('adsm-file').click()"><i class="ti ti-upload" aria-hidden="true"></i> Nhập từ Excel</button>`:''}
+        <button class="btn btn-g sm" onclick="_adsMExport()"><i class="ti ti-download" aria-hidden="true"></i> Xuất Excel</button>
+        ${adm?`<button id="adsm-save" class="btn btn-p sm${S.dirty?' pulse':''}" onclick="_adsMSave()"><i class="ti ti-device-floppy" aria-hidden="true"></i> Lưu số liệu</button>`:''}
+      </div>
+      ${S.imported?`<div class="alert alert-warn" style="margin-top:12px">Số liệu vừa nhập từ file <b>chưa được lưu</b>. Kiểm tra lại từng dòng rồi bấm <b>Lưu số liệu</b>.</div>`:''}
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="overflow-x:auto">
+      <table id="adsm-tbl">
+        <thead>
+          <tr><th rowspan="2">STT</th><th rowspan="2">Đơn vị</th><th rowspan="2">Ngân sách/tháng</th><th rowspan="2">Số tiền đã chạy</th><th rowspan="2">Ngày bắt đầu</th><th rowspan="2">Ngày kết thúc</th><th rowspan="2">Loại chiến dịch</th><th>Tin nhắn</th><th>Data SĐT</th><th>Chi phí/SĐT</th><th rowspan="2">Chuyển đổi xe ký cọc</th>${adm?'<th rowspan="2"></th>':''}</tr>
+          <tr><th style="font-weight:600;background:#fef9e7">Thực tế</th><th style="font-weight:600;background:#fef9e7">Thực tế</th><th style="font-weight:600;background:#fef9e7">Tự tính</th></tr>
+        </thead>
+        <tbody>${body||`<tr><td colspan="12" style="text-align:center;padding:24px;color:var(--text3)">Chưa có đơn vị</td></tr>`}</tbody>
+        <tfoot><tr>
+          <td></td><td>TỔNG CỘNG</td>
+          <td id="adsm-t-budgetPlan" style="text-align:right">${fmt(t.budgetPlan)||'0'}</td>
+          <td id="adsm-t-budget" style="text-align:right;color:#b91c1c">${fmt(t.budget)||'0'}</td>
+          <td></td><td></td><td></td>
+          <td id="adsm-t-messages" style="text-align:right">${fmt(t.messages)||'0'}</td>
+          <td id="adsm-t-leads" style="text-align:right">${fmt(t.leads)||'0'}</td>
+          <td id="adsm-t-cpl" style="text-align:right">${t.leads?fmt(Math.round(t.budget/t.leads))+' đ':'—'}</td>
+          <td id="adsm-t-coc" style="text-align:center">${fmt(t.coc)||'0'}</td>
+          ${adm?'<td></td>':''}
+        </tr></tfoot>
+      </table>
+      </div>
+    </div>
+    <div style="font-size:11.5px;color:var(--text3);margin-top:8px">Chi phí/SĐT = Số tiền đã chạy ÷ Data SĐT. Ô "Số tiền đã chạy" tô đỏ khi vượt ngân sách tháng.${adm?' Sửa trực tiếp trên bảng rồi bấm <b>Lưu số liệu</b>.':''}</div>`;
+  };
+  try{ if(typeof PAGE_TITLES==='object')PAGE_TITLES.adsreport='📈 Theo dõi ADS hàng tháng'; }catch(e){}
+  window.addEventListener('beforeunload',e=>{ if(S.dirty&&document.getElementById('adsm-tbl')){ e.preventDefault(); e.returnValue=''; } });
+})();
+</script>
 <script id="theme-clean-pro-icons">
 /* ═══ THEME CLEAN PRO – đổi emoji giao diện sang icon Tabler (chỉ hiển thị, không đổi dữ liệu) ═══ */
 (function(){
