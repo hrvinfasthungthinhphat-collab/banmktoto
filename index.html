@@ -8753,7 +8753,9 @@ function _planJs(v){return String(v??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'
 function planEvaluationButton(sid,day,ch){
   if(!isAdmin())return '';
   const st=getPlanReviewStatus(sid,day,ch);
-  return `<button onclick="openPlanReportDetail('${_planJs(sid)}',${parseInt(day)},'${_planJs(ch)}')" class="btn-evaluate-plan${st.reviewed?' reviewed':''}">${st.reviewed?'👁️ Xem Đánh Giá':'⭐ Đánh giá'}</button>`;
+  const done=(typeof isPlanDone==='function')&&(planDayTasks(sid,day)||[]).some(t=>t.ch===ch&&isPlanDone(sid,day,t.ch,t.taskId));
+  const quick=(!st.reviewed&&done)?_quickReviewBtns(`quickReviewPlan('${_planJs(sid)}',${parseInt(day)},'${_planJs(ch)}',`):'';
+  return `<button onclick="openPlanReportDetail('${_planJs(sid)}',${parseInt(day)},'${_planJs(ch)}')" class="btn-evaluate-plan${st.reviewed?' reviewed':''}">${st.reviewed?'👁️ Xem Đánh Giá':'⭐ Đánh giá'}</button>${quick}`;
 }
 function _planMetricBox(label,value){
   const v=(value===undefined||value===null||value==='')?'—':value;
@@ -9088,7 +9090,111 @@ function getScheduleReviewStatus(scheduleId){
 function scheduleEvaluationButton(scheduleId){
   if(!isAdmin())return '';
   const st=getScheduleReviewStatus(scheduleId);
-  return `<button onclick="openEvaluationFromSchedule('${_planJs(scheduleId)}')" class="btn-evaluate-plan${st.reviewed?' reviewed':''}">${st.reviewed?'👁️ Xem lại Đánh Giá':'⭐ Đánh giá'}</button>`;
+  const sch=(DB.schedules||[]).find(s=>String(s.id)===String(scheduleId));
+  const quick=(!st.reviewed&&sch&&sch.status==='done')?_quickReviewBtns(`quickReviewSchedule('${_planJs(scheduleId)}',`):'';
+  return `<button onclick="openEvaluationFromSchedule('${_planJs(scheduleId)}')" class="btn-evaluate-plan${st.reviewed?' reviewed':''}">${st.reviewed?'👁️ Xem lại Đánh Giá':'⭐ Đánh giá'}</button>${quick}`;
+}
+// ═══ ĐÁNH GIÁ NHANH: bấm Đạt / Không đạt ngay trên khung ngày, không cần mở chi tiết ═══
+function _quickReviewBtns(callPrefix){
+  const b='padding:4px 9px;border-radius:6px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;line-height:1.3';
+  return `<div class="quick-rv" style="display:flex;gap:4px;justify-content:flex-end">
+    <button title="Đánh giá nhanh: Đạt" onclick="event.stopPropagation();${callPrefix}true)" style="${b};background:#dcfce7;color:#15803d;border:1px solid #86efac">✓ Đạt</button>
+    <button title="Đánh giá nhanh: Không đạt" onclick="event.stopPropagation();${callPrefix}false)" style="${b};background:#fef2f2;color:#b91c1c;border:1px solid #fecaca">✕ Không đạt</button>
+  </div>`;
+}
+function _quickReviewObj(pass){
+  return {type:'passfail',pass:!!pass,note:'',quick:true,reviewedBy:curUser?.name||'Admin',reviewedAt:Date.now()};
+}
+function _quickNotify(storeId,msg,review,reportId){
+  if(!DB.notifications)DB.notifications=[];
+  const owner=(DB.users||[]).find(u=>u.storeId===storeId&&u.role!=='admin');
+  DB.notifications.unshift({id:'ndg_'+Date.now()+'_'+Math.random().toString(36).slice(2,5),type:'danhgia',message:msg,
+    storeId,targetUserId:owner?.id||null,reportId:reportId||null,reviewData:review,timestamp:Date.now(),isRead:false});
+  if(DB.notifications.length>300)DB.notifications=DB.notifications.slice(0,300);
+}
+function _quickRefresh(){
+  try{ if(_planModalSid&&_planModalDay&&document.getElementById('plan-day-modal-ov')?.classList.contains('open'))openPlanDayModal(_planModalSid,_planModalDay); }catch(e){}
+  try{ if(typeof renderPlan==='function'&&document.getElementById('p-plan')?.classList.contains('active'))renderPlan(); }catch(e){}
+}
+// Ghi 1 đánh giá cho lịch (không lưu DB, không refresh) – dùng chung cho đánh giá lẻ & hàng loạt
+async function _quickReviewScheduleCore(scheduleId,pass){
+  const sch=(DB.schedules||[]).find(s=>String(s.id)===String(scheduleId));
+  if(!sch)return 'skip';
+  if(getScheduleReviewStatus(scheduleId).reviewed)return 'skip';
+  const review=_quickReviewObj(pass);
+  const title=sch.chuDe||sch.noiDung||sch.title||cname(sch.categoryId)||'';
+  const msg=`${curUser?.name||'Quản lý MKT'} vừa đánh giá ${pass?'ĐẠT':'KHÔNG ĐẠT'}: ${title}`;
+  const log=findLogFromScheduleItem(scheduleId);
+  const inMem=log&&(DB.dailyLogs||[]).some(l=>l&&String(l.id)===String(log.id));
+  if(log&&inMem){
+    log.review=review;
+    _quickNotify(log.storeId,msg,review,log.id);
+    return 'mem';
+  }
+  if(log&&!inMem){
+    const ok=await _saveReviewToExtLog(log,review);
+    return ok?'ext':'fail';
+  }
+  const p=(sch.ngayDuKien||'').split('-');
+  const y=parseInt(p[0])||planYear, m=parseInt(p[1])||planMonth;
+  const key=getScheduleReviewKey(scheduleId,m,y);
+  if(!DB.planReviews||Array.isArray(DB.planReviews))DB.planReviews={};
+  DB.planReviews[key]={...review,source:'scheduleOnly',scheduleId,storeId:sch.storeId,month:m,year:y,content:title};
+  window._extPlanReviews[key]=DB.planReviews[key];
+  _quickNotify(sch.storeId,msg,review,null);
+  return 'mem';
+}
+async function quickReviewSchedule(scheduleId,pass){
+  if(!isAdmin()){toast('Chỉ Admin mới được đánh giá!','err');return;}
+  try{
+    const r=await _quickReviewScheduleCore(scheduleId,pass);
+    if(r==='fail')return;
+    if(r==='mem')await saveDB();
+    toast(pass?'✅ Đã đánh giá ĐẠT':'Đã đánh giá KHÔNG ĐẠT',pass?'ok':'warn');
+  }catch(e){ console.error(e); toast('⚠️ Lưu đánh giá thất bại: '+(e?.message||''),'err'); return; }
+  _quickRefresh();
+}
+// Đạt tất cả: các lịch đã báo cáo nhưng chưa đánh giá trong ngày đang mở
+async function quickReviewAllSchedulesOfDay(sid,day){
+  if(!isAdmin()){toast('Chỉ Admin mới được đánh giá!','err');return;}
+  const dayStr=`${planYear}-${String(planMonth).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  const list=(DB.schedules||[]).filter(s=>s.storeId===sid&&s.ngayDuKien===dayStr&&s.status==='done'&&!getScheduleReviewStatus(s.id).reviewed);
+  if(!list.length){toast('Không còn lịch nào chờ đánh giá.','inf');return;}
+  if(!confirm(`Đánh giá ĐẠT cho ${list.length} lịch đã báo cáo của ngày ${day}/${planMonth}?`))return;
+  showLoading(`Đang đánh giá ${list.length} lịch...`);
+  let n=0,needSave=false;
+  try{
+    for(const s of list){ const r=await _quickReviewScheduleCore(s.id,true); if(r==='mem'){n++;needSave=true;} else if(r==='ext')n++; }
+    if(needSave)await saveDB();
+  }catch(e){ console.error(e); toast('⚠️ Có lỗi khi lưu: '+(e?.message||''),'err'); }
+  finally{ hideLoading(); }
+  toast(`✅ Đã đánh giá ĐẠT ${n} lịch`,'ok');
+  _quickRefresh();
+}
+// Đánh giá nhanh cho nhiệm vụ trong Kế hoạch nội dung
+async function quickReviewPlan(sid,day,ch,pass){
+  if(!isAdmin()){toast('Chỉ Admin mới được đánh giá!','err');return;}
+  if(getPlanReviewStatus(sid,day,ch).reviewed){_quickRefresh();return;}
+  const review={..._quickReviewObj(pass),planKey:getPlanReviewKey(sid,day,ch)};
+  const log=findPlanRelatedLog(sid,day,ch,planMonth,planYear);
+  const inMem=log&&(DB.dailyLogs||[]).some(l=>l&&String(l.id)===String(log.id));
+  const msg=`${curUser?.name||'Quản lý MKT'} vừa đánh giá ${pass?'ĐẠT':'KHÔNG ĐẠT'} nhiệm vụ ngày ${day}/${planMonth}/${planYear}`;
+  try{
+    if(log&&!inMem){ if(!await _saveReviewToExtLog(log,review))return; }
+    else{
+      if(log&&inMem){ log.review=review; _quickNotify(log.storeId,msg,review,log.id); }
+      else{
+        if(!DB.planReviews||Array.isArray(DB.planReviews))DB.planReviews={};
+        const k=getPlanReviewKey(sid,day,ch,planMonth,planYear);
+        DB.planReviews[k]={...review,source:'planOnly',sid,day,ch,month:planMonth,year:planYear,content:_getPlanTaskInfo(sid,day,ch).content||''};
+        window._extPlanReviews[k]=DB.planReviews[k];
+        _quickNotify(sid,msg,review,null);
+      }
+      await saveDB();
+    }
+    toast(pass?'✅ Đã đánh giá ĐẠT':'Đã đánh giá KHÔNG ĐẠT',pass?'ok':'warn');
+  }catch(e){ console.error(e); toast('⚠️ Lưu đánh giá thất bại: '+(e?.message||''),'err'); return; }
+  _quickRefresh();
 }
 async function openEvaluationFromSchedule(scheduleId){
   if(!isAdmin()){toast('Chỉ Admin mới được đánh giá!','err');return;}
@@ -9331,7 +9437,10 @@ function openPlanDayModal(sid, day){
   const daySchedules=[..._ownScheds,..._otherScheds];
   const schRows=(_ownScheds.length>0||_otherScheds.length>0)?`
   <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
-    <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📅 Lịch đăng ký ngày này</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
+      <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px">📅 Lịch đăng ký ngày này</div>
+      ${(()=>{ if(!isAdmin())return ''; const n=_ownScheds.filter(s=>s.status==='done'&&!getScheduleReviewStatus(s.id).reviewed).length; return n>0?`<button onclick="quickReviewAllSchedulesOfDay('${_planJs(sid)}',${parseInt(day)})" style="padding:5px 11px;border-radius:7px;border:1px solid #86efac;background:#16a34a;color:#fff;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">✓ Đạt tất cả (${n})</button>`:''; })()}
+    </div>
     <div style="display:flex;flex-direction:column;gap:8px">
       ${_ownSchedHtml||'<div style="color:var(--text3);font-size:12px">— Đơn vị này chưa có lịch ngày này</div>'}
     </div>
