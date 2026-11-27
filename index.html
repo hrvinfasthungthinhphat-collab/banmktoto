@@ -8924,6 +8924,14 @@ function _memberSchReviewsEnsure(m,y){
     if(last==='loading'||(last&&Date.now()-last<30000))return;
     _schReviewLoadedAt[k]='loading';
     const ref=database.ref(`${HT_ROOT}/${MONTH_NODE}/${k}/planReviews`);
+    // Chỉ tiêu KPI của đơn vị (khóa phẳng sid_kênh_tháng_năm)
+    const tRef=database.ref(`${HT_ROOT}/${MONTH_NODE}/${k}/planTargets`);
+    tRef.orderByKey().startAt(`${sid}_`).endAt(`${sid}_`).once('value').catch(()=>tRef.once('value')).then(snap=>{
+      const all=_obj(snap&&snap.val?snap.val():null); let ch=false;
+      if(!DB.planTargets||Array.isArray(DB.planTargets))DB.planTargets={};
+      Object.entries(all).forEach(([key,v])=>{ if(String(key).startsWith(sid+'_')&&v!==null&&typeof v!=='object'&&DB.planTargets[key]!==v){DB.planTargets[key]=v;ch=true;} });
+      if(ch){ try{ if(document.getElementById('p-plan')?.classList.contains('active'))renderPlan(); }catch(e){} }
+    }).catch(()=>{});
     ref.orderByKey().startAt('sch_').endAt('sch_').once('value')
       .catch(()=>ref.once('value'))
       .then(snap=>{
@@ -9886,6 +9894,81 @@ function brandLogoHtml(store,size){
   return `<span title="${b.key.toUpperCase()}" style="width:${size}px;height:${size}px;border-radius:7px;background:${b.bg};display:inline-flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="${b.vb}" width="${Math.round(size*.78)}" height="${Math.round(size*.78)}" fill="${b.color}" aria-hidden="true" style="display:block">${b.p}</svg></span>`;
 }
 
+// ═══ KPI THÁNG theo đơn vị: số bài được duyệt (đánh giá Đạt) / chỉ tiêu – đỏ nếu chậm tiến độ ═══
+const PLAN_KPI_CHANNELS=[
+  {ch:'fp',  cat:'CV02',label:'Facebook',  unit:'bài',  icon:'ti-brand-facebook'},
+  {ch:'tt',  cat:'CV03',label:'TikTok',    unit:'video',icon:'ti-brand-tiktok'},
+  {ch:'live',cat:'CV01',label:'Livestream',unit:'phiên',icon:'ti-broadcast'},
+  {ch:'mega',cat:'CV11',label:'Mega Live', unit:'buổi', icon:'ti-device-tv'}
+];
+function _isApprovedReview(r){
+  if(!r||!Object.keys(r).length)return false;
+  if(r.pass===false)return false;
+  if(r.type==='passfail')return r.pass===true;
+  return true;
+}
+function planKpiStats(sid,m,y){
+  m=parseInt(m)||planMonth;y=parseInt(y)||planYear;
+  const mm=String(m).padStart(2,'0');
+  const items=(DB.schedules||[]).filter(s=>s&&s.storeId===sid&&s.ngayDuKien&&s.ngayDuKien.slice(0,4)===String(y)&&s.ngayDuKien.slice(5,7)===mm);
+  const now=new Date(),tm=now.getMonth()+1,ty=now.getFullYear(),dim=new Date(y,m,0).getDate();
+  // Tỷ lệ thời gian đã trôi qua của tháng (tháng cũ = 1, tháng tương lai = 0)
+  const elapsed=(y<ty||(y===ty&&m<tm))?1:(y===ty&&m===tm)?now.getDate()/dim:0;
+  return PLAN_KPI_CHANNELS.map(c=>{
+    const target=parseInt(getPlanTarget(sid,c.ch))||0;
+    const list=items.filter(s=>String(s.categoryId||'')===c.cat);
+    let approved=0,reported=0;
+    list.forEach(s=>{
+      const st=getScheduleReviewStatus(s.id);
+      if(st.reviewed&&_isApprovedReview(st.review))approved++;
+      if(s.status==='done'||st.reviewed)reported++;
+    });
+    const expected=Math.floor(target*elapsed);
+    const state=target<=0?'none':approved>=target?'done':approved<expected?'behind':'ontrack';
+    return{...c,target,registered:list.length,reported,approved,expected,state};
+  });
+}
+function planKpiStripHtml(sid){
+  const stats=planKpiStats(sid,planMonth,planYear).filter(s=>s.target>0||s.registered>0);
+  if(!stats.length)return '';
+  const COL={done:['#16a34a','rgba(22,163,74,.07)','#bbf7d0','Đã đạt KPI'],behind:['#dc2626','rgba(220,38,38,.06)','#fecaca','Chậm tiến độ'],ontrack:['#2563eb','rgba(37,99,235,.05)','#dbe5ff','Đúng tiến độ'],none:['#64748b','var(--bg3)','var(--border)','Chưa đặt KPI']};
+  return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:12px 14px;margin-bottom:12px">
+    <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <i class="ti ti-target-arrow" aria-hidden="true"></i><span>KPI tháng ${planMonth}/${planYear} – ${escHtml(sname(sid))}</span>
+      <span style="font-weight:500;color:var(--text3);font-size:11px">· Số bài được duyệt (đánh giá Đạt) / chỉ tiêu</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px">
+    ${stats.map(s=>{
+      const [c,bg,bd,tag]=COL[s.state];
+      const pct=s.target>0?Math.min(100,Math.round(s.approved/s.target*100)):0;
+      const expPct=s.target>0?Math.min(100,Math.round(s.expected/s.target*100)):0;
+      return `<div style="background:${bg};border:1.5px solid ${bd};border-radius:10px;padding:10px 12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+          <span style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--text)"><i class="ti ${s.icon}" aria-hidden="true" style="font-size:16px;color:${c}"></i>${s.label}</span>
+          <span style="font-size:10px;font-weight:700;color:${c};background:#fff;border:1px solid ${bd};border-radius:20px;padding:1px 7px;white-space:nowrap">${tag}</span>
+        </div>
+        <div style="display:flex;align-items:baseline;gap:4px;margin:6px 0 5px">
+          <span style="font-size:22px;font-weight:800;color:${c};font-variant-numeric:tabular-nums">${s.approved}</span>
+          <span style="font-size:13px;font-weight:600;color:var(--text3)">/ ${s.target>0?s.target:'—'} ${s.unit}</span>
+          ${s.target>0?`<span style="margin-left:auto;font-size:12px;font-weight:700;color:${c}">${pct}%</span>`:''}
+        </div>
+        <div style="position:relative;background:var(--bg4);border-radius:10px;height:6px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:${c};border-radius:10px"></div>
+          ${s.state==='behind'||s.state==='ontrack'?`<div title="Mức cần đạt đến hôm nay: ${s.expected}" style="position:absolute;top:0;bottom:0;left:${expPct}%;width:2px;background:#0f172a;opacity:.45"></div>`:''}
+        </div>
+        <div style="font-size:10.5px;color:var(--text3);margin-top:5px">Đăng ký ${s.registered} · Đã báo cáo ${s.reported}${s.state==='behind'?` · <b style="color:${c}">cần ≥ ${s.expected} đến hôm nay</b>`:''}</div>
+      </div>`;
+    }).join('')}
+    </div>
+  </div>`;
+}
+// Dòng KPI rút gọn cho thẻ tiến độ toàn hệ thống (admin)
+function planKpiMiniHtml(sid){
+  const stats=planKpiStats(sid,planMonth,planYear).filter(s=>s.target>0);
+  if(!stats.length)return '';
+  const col={done:'#16a34a',behind:'#dc2626',ontrack:'#2563eb'};
+  return `<div style="display:flex;flex-wrap:wrap;gap:3px 8px;margin-top:5px">${stats.map(s=>`<span title="${s.label}: ${s.approved}/${s.target} được duyệt" style="font-size:10px;font-weight:700;color:${col[s.state]};display:inline-flex;align-items:center;gap:2px;white-space:nowrap"><i class="ti ${s.icon}" aria-hidden="true"></i>${s.approved}/${s.target}</span>`).join('')}</div>`;
+}
 function renderPlan(){
   try{ _planExtraEnsure(planMonth,planYear); }catch(e){}
   try{ _memberSchReviewsEnsure(planMonth,planYear); }catch(e){}
@@ -9930,7 +10013,7 @@ function renderPlan(){
           <div style="display:flex;align-items:center;gap:7px;min-width:0">${brandLogoHtml(s,32)}<div style="font-size:11px;font-weight:700;color:${active?c:'var(--text2)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0" title="${s.name}">${s.name}</div></div>
           <div style="font-size:20px;font-weight:800;color:${c};margin:2px 0">${p}%</div>
           <div style="background:var(--bg4);border-radius:10px;height:5px;overflow:hidden"><div style="height:100%;width:${p}%;background:${c};border-radius:10px"></div></div>
-          <div style="font-size:10px;color:var(--text3);margin-top:4px">${d}/${t} việc</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:4px">${d}/${t} việc</div>${planKpiMiniHtml(s.id)}
         </div>`;
       }).join('')}
       </div>
@@ -10127,6 +10210,7 @@ function renderPlan(){
       {ch:'fp',label:'📘 Fanpage',unit:'bài',kind:'post'},
       {ch:'tt',label:'🎵 TikTok',unit:'video',kind:'post'},
       {ch:'live',label:'📺 Livestream',unit:'phiên',kind:'post'},
+      {ch:'mega',label:'📺 Mega Live',unit:'buổi',kind:'post'},
       {ch:'zalo',label:'💬 Zalo OA',unit:'bài',kind:'post'},
       {ch:'targetFbFol',label:'📈 Follow Fanpage',unit:'follow',kind:'growth'},
       {ch:'targetTtFol',label:'📈 Follow TikTok',unit:'follow',kind:'growth'},
@@ -10220,6 +10304,7 @@ function renderPlan(){
       <button class="btn btn-p sm" onclick="openAddPlanTaskModal()" title="Thêm công việc vào kế hoạch thủ công">➕ Thêm công việc</button>
     </div>
   </div>
+  ${planKpiStripHtml(sid)}
   ${adminSummary}
   ${tabBar}
   ${calPanel}
@@ -13303,10 +13388,14 @@ function exportAdsExcel() {
     DB.adsReports = filterRowsByStore(DB.adsReports, storeId);
     DB.unitAssessments = filterRowsByStore(DB.unitAssessments, storeId);
     DB.planCompletion = filterKeysByStore(DB.planCompletion, storeId);
-    DB.planReviews = filterKeysByStore(DB.planReviews, storeId);
+    { const _allPr = obj(DB.planReviews); DB.planReviews = filterKeysByStore(_allPr, storeId);
+      Object.entries(_allPr).forEach(([k,v])=>{ if(String(k).startsWith('sch_') && v && String(v.storeId||'')===String(storeId)) DB.planReviews[k]=v; }); }
     const lk = lkey(curMonth,curYear);
     if(DB.masterPlans && DB.masterPlans[lk]) DB.masterPlans = {[lk]: {[storeId]: (DB.masterPlans[lk]||{})[storeId] || {}}};
-    if(DB.planTargets && DB.planTargets[lk]) DB.planTargets = {[lk]: {[storeId]: (DB.planTargets[lk]||{})[storeId] || {}}};
+    // Giữ chỉ tiêu KPI dạng khóa phẳng của đơn vị (vd S1_fp_11_2026) + chỉ tiêu tăng trưởng lồng theo tháng
+    { const _pt = obj(DB.planTargets), _out = filterKeysByStore(_pt, storeId);
+      Object.keys(_pt).forEach(k=>{ if(_pt[k] && typeof _pt[k]==='object' && !Array.isArray(_pt[k]) && /^\d{1,2}_\d{4}$/.test(k)) _out[k] = {[storeId]: _pt[k][storeId] || {}}; });
+      DB.planTargets = _out; }
     return true;
   }
   async function backup(reason){
@@ -14795,8 +14884,8 @@ if (_overdueOv) {
     if(!admin()) Object.entries(obj(payload.planReviews)).forEach(([k,v])=>{ if(String(k).startsWith('sch_') && v && String(v.storeId||'')===String(sid)) out.planReviews[k]=v; });
     out.planTargets = {};
     const pt=obj(payload.planTargets);
-    Object.keys(pt).forEach(k=>{ if(String(k).startsWith(`${sid}_`)) out.planTargets[k]=pt[k]; });
-    if(pt[lk] && typeof pt[lk]==='object') out.planTargets[lk] = {[sid]:pt[lk][sid] || {}};
+    Object.keys(pt).forEach(k=>{ if(String(k).startsWith(`${sid}_`) || (admin() && pt[k]!==null && typeof pt[k]!=='object')) out.planTargets[k]=pt[k]; });
+    if(pt[lk] && typeof pt[lk]==='object') out.planTargets[lk] = admin() ? {...pt[lk]} : {[sid]:pt[lk][sid] || {}};
     out.masterPlans = {};
     const mp=obj(payload.masterPlans);
     if(mp[lk] && typeof mp[lk]==='object') out.masterPlans[lk] = {[sid]:mp[lk][sid] || {}};
@@ -14952,6 +15041,8 @@ if (_overdueOv) {
     markRemovedKeys(updates,'planReviews',prev.planReviews,local.planReviews,sid);
     // Admin đang lọc 1 đơn vị: vẫn ghi mọi đánh giá/hoàn thành của tháng (đánh giá lịch sch_…, đơn vị khác) – chỉ update theo khóa, không xoá
     if(admin()){
+      // Chỉ tiêu KPI dạng khóa phẳng (vd S1_fp_11_2026) của mọi đơn vị
+      Object.entries(obj(local.planTargets)).forEach(([k,v])=>{ if(v!==null && typeof v!=='object'){ const p=`planTargets/${safeKey(k)}`; if(!(p in updates)) updates[p]=v; } });
       ['planCompletion','planReviews'].forEach(child=>{
         Object.entries(obj(local[child])).forEach(([k,v])=>{ const p=`${child}/${safeKey(k)}`; if(!(p in updates)) updates[p]=v; });
       });
