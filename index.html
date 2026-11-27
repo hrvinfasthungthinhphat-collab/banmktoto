@@ -14567,6 +14567,53 @@ if (_overdueOv) {
     _loadedMonthKeys[key]=merged;
   }
 
+  // ── FIX: Báo cáo/đánh giá thuộc tháng KHÁC "Tháng báo cáo" đang chọn trước đây bị lọc bỏ, không lưu lên Firebase.
+  // Hàm này ghi bổ sung các bản ghi đó vào đúng node tháng của chính nó (update theo id, không xoá gì).
+  function _rowMonthYear(r){
+    let m=parseInt(r&&r.month), y=parseInt(r&&r.year);
+    if(!m||!y){ try{ const dm=_dateMonth(r); m=dm.month; y=dm.year; }catch(e){} }
+    return {m:parseInt(m)||0, y:parseInt(y)||0};
+  }
+  function collectOffMonthRows(sid){
+    const cm=parseInt(curMonth), cy=parseInt(curYear);
+    const byMonth={};
+    const add=(m,y,path,val)=>{ const k=mkey(m,y); (byMonth[k]=byMonth[k]||{})[path]=val; };
+    ROW_CHILDREN.forEach(child=>{
+      const rows = sid ? rowsByStore(DB[child],sid) : arr(DB[child]);
+      rows.forEach((r,i)=>{
+        const {m,y}=_rowMonthYear(r);
+        if(!m||!y||(m===cm&&y===cy)) return;
+        add(m,y,`${child}/${recId(r,child,i)}`,r);
+      });
+    });
+    // Lịch đăng ký: ghi thêm vào node tháng của lịch (root/schedules đã được ghi riêng)
+    (sid ? rowsByStore(arr(DB.schedules),sid) : arr(DB.schedules)).forEach((r,i)=>{
+      let dm={}; try{ dm=_dateMonth(r); }catch(e){}
+      const m=parseInt(dm.month), y=parseInt(dm.year);
+      if(!m||!y||(m===cm&&y===cy)) return;
+      add(m,y,`schedules/${recId(r,'schedules',i)}`,r);
+    });
+    // planCompletion / planReviews có hậu tố _tháng_năm khác tháng đang chọn
+    KEY_CHILDREN.forEach(child=>{
+      const src = sid ? keysByStore(DB[child],sid) : obj(DB[child]);
+      Object.entries(src).forEach(([k,v])=>{
+        const mt=String(k).match(/_(\d{1,2})_(\d{4})(?:_logId|_manual)?$/);
+        if(!mt) return;
+        const m=parseInt(mt[1]), y=parseInt(mt[2]);
+        if(m===cm&&y===cy) return;
+        add(m,y,`${child}/${safeKey(k)}`,v);
+      });
+    });
+    // Sao chép sâu ngay lúc này: listener realtime có thể thay DB.dailyLogs trong lúc đang lưu tháng hiện tại
+    try{ return JSON.parse(JSON.stringify(byMonth)); }catch(e){ return byMonth; }
+  }
+  async function writeOffMonthRows(byMonth){
+    for(const k of Object.keys(byMonth||{})){
+      try{ await database.ref(`${HT_ROOT}/${MONTH_NODE}/${k}`).update(sanitizeForFirebase(byMonth[k])); }
+      catch(e){ console.warn('[off-month save] lỗi ghi tháng',k,e?.message||e); }
+    }
+  }
+
   saveDB = function(){
     if(__saveInFlight) return __saveInFlight;
     __saveInFlight=(async()=>{
@@ -14575,11 +14622,15 @@ if (_overdueOv) {
         normalizeDB();
         if(admin()){
           const scope=scopedStoreFromUI();
+          const off=collectOffMonthRows(''); // Admin: gom mọi đơn vị (chỉ update theo id, không xoá)
           await saveStaticIfAdmin();
           if(scope) await saveScopedStore(scope); else await saveAllAdmin();
+          await writeOffMonthRows(off);
         }else{
           const sid=currentStore(); if(!sid) throw new Error('Missing storeId');
+          const off=collectOffMonthRows(sid);
           await saveScopedStore(sid);
+          await writeOffMonthRows(off);
         }
       }catch(e){ console.error('Consolidated saveDB error:',e); toastSafe('Lưu thất bại. Dữ liệu trên màn hình vẫn được giữ, vui lòng thử lại.','err'); throw e; }
       finally{ __saveInFlight=null; hideLoading(); }
