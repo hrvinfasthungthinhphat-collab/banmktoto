@@ -2364,6 +2364,16 @@ const _todayInit = new Date();
 let curMonth = _todayInit.getMonth() + 1;
 let curYear  = _todayInit.getFullYear();
 let curDate  = _todayInit.getDate();
+// Tháng báo cáo: mặc định luôn là THÁNG HIỆN TẠI theo lịch. Người xem chọn tháng khác thì chỉ áp dụng cho tab của chính họ (không ghi lên Firebase cho mọi người).
+function _viewerMonth(){
+  const t=new Date();
+  try{ const v=JSON.parse(sessionStorage.getItem('ht_view_month')||'null'); if(v&&parseInt(v.m)>=1&&parseInt(v.m)<=12&&parseInt(v.y)>2000) return {m:parseInt(v.m),y:parseInt(v.y)}; }catch(e){}
+  return {m:t.getMonth()+1,y:t.getFullYear()};
+}
+function _setViewerMonth(m,y){
+  const t=new Date();
+  try{ if(parseInt(m)===t.getMonth()+1&&parseInt(y)===t.getFullYear()) sessionStorage.removeItem('ht_view_month'); else sessionStorage.setItem('ht_view_month',JSON.stringify({m:parseInt(m),y:parseInt(y)})); }catch(e){}
+}
 
 let DB = { stores:[], categories:[], kpiTargets:[], dailyLogs:[], users:[], settings:{month:curMonth, year:curYear} };
 let curUser = null;
@@ -2864,8 +2874,7 @@ async function loadStaticData(){
     if(brandPlansRoot.val()) DB.brandPlans = _arr(brandPlansRoot.val());
     if(deptPlansRoot.val()) DB.deptPlans = _arr(deptPlansRoot.val());
     normalizeDB();
-    curMonth = DB.settings.month || curMonth;
-    curYear = DB.settings.year || curYear;
+    { const _vm=_viewerMonth(); curMonth=_vm.m; curYear=_vm.y; }
     if(!_dashViewMonthManual){ dashViewMonth = curMonth; dashViewYear = curYear; }
     fillRegisterStores();
     buildMonthSelector();
@@ -3273,13 +3282,13 @@ function buildSidebar(){
 function buildMonthSelector(){
   const el=document.getElementById('globalMonth');if(!el)return;
   const y=curYear||(new Date().getFullYear());
-  el.innerHTML=Array.from({length:12},(_,i)=>`<option value="${i+1}"${i+1===curMonth?' selected':''}>Tháng ${i+1} / ${y}</option>`).join('');
+  const _t=new Date();
+  el.innerHTML=Array.from({length:12},(_,i)=>`<option value="${i+1}"${i+1===curMonth?' selected':''}>Tháng ${i+1} / ${y}${(i+1===_t.getMonth()+1&&y===_t.getFullYear())?' · hiện tại':''}</option>`).join('');
 }
 async function setGlobalMonth(){
   curMonth=parseInt(document.getElementById('globalMonth').value);
-  DB.settings.month=curMonth;
+  _setViewerMonth(curMonth,curYear);
   await loadMonthData(curMonth,curYear,false);
-  saveDB();
   buildMonthSelector();
   // Đồng bộ dashboard nếu người dùng chưa tự chọn riêng
   if(!_dashViewMonthManual){ dashViewMonth=curMonth; dashViewYear=curYear; }
@@ -7622,11 +7631,10 @@ function getPlanKey(sid,day,ch,taskId){
   return `${sid}_${day}_${ch}_${planMonth}_${planYear}`;
 }
 function isPlanDone(sid,day,ch,taskId){
-  const pc=DB.planCompletion||{};
-  // Ưu tiên key taskId nếu có
-  if(taskId){ if(pc[`taskId:${taskId}`]) return true; }
-  // Fallback: key cũ (tương thích ngược)
-  return !!pc[getPlanKey(sid,day,ch)];
+  const pc=DB.planCompletion||{}, ex=window._extPlanCompletion||{};
+  if(taskId){ const tk=`taskId:${taskId}`; if(pc[tk]||ex[tk]) return true; }
+  const k=getPlanKey(sid,day,ch);
+  return !!(pc[k]||ex[k]);
 }
 async function setPlanDone(sid,day,ch,val,taskId){
   if(!DB.planCompletion)DB.planCompletion={};
@@ -8662,8 +8670,8 @@ function findPlanRelatedLog(sid,day,ch,month=planMonth,year=planYear){
   if(direct)return direct;
   const info=_getPlanTaskInfo(sid,day,ch);
   const hasSuffix=_planHasTaskSuffix(ch);
-  const logs=(DB.dailyLogs||[]).filter(l=>{
-    if(String(l.storeId||'')!==String(sid))return false;
+  const logs=[...(DB.dailyLogs||[]),...Object.values(window._schExtLogCache||{}).filter(x=>x&&!(DB.dailyLogs||[]).some(d=>d&&String(d.id)===String(x.id)))].filter(l=>{
+    if(!l||String(l.storeId||'')!==String(sid))return false;
     const dp=_planLogDateParts(l);
     return dp.day===parseInt(day)&&dp.month===parseInt(month)&&dp.year===parseInt(year);
   });
@@ -8707,7 +8715,7 @@ function getPlanReviewStatus(sid,day,ch,month=planMonth,year=planYear){
     return{reviewed:true,source:'dailyLog',log,review:log.review,scoreText:_reviewScoreText(log.review)};
   }
   const key=getPlanReviewKey(sid,day,ch,month,year);
-  const pr=(DB.planReviews||{})[key];
+  const pr=_planReviewLookup(key);
   if(pr&&Object.keys(pr).length){
     return{reviewed:true,source:'planReviews',log:null,review:pr,scoreText:_reviewScoreText(pr)};
   }
@@ -8865,6 +8873,59 @@ function openPlanReviewModal(sid,day,ch){
   document.body.appendChild(ov);
   if(isSTND)calcPlanRv();
 }
+// ═══ Dữ liệu của tháng đang xem trên lịch Kế hoạch khi khác "Tháng báo cáo" chung ═══
+// (trước đây F5 chỉ nạp tháng báo cáo chung → đánh giá/báo cáo tháng khác "biến mất" dù đã lưu)
+window._extPlanReviews=window._extPlanReviews||{};
+window._extPlanCompletion=window._extPlanCompletion||{};
+window._schExtLogCache=window._schExtLogCache||{};
+const _planExtraLoaded={};
+function _planExtraEnsure(m,y){
+  m=parseInt(m);y=parseInt(y);
+  if(!m||!y||(m===parseInt(curMonth)&&y===parseInt(curYear)))return;
+  if(typeof database==='undefined')return;
+  const k=_mkey(m,y);
+  if(_planExtraLoaded[k])return;
+  _planExtraLoaded[k]='loading';
+  Promise.all(['dailyLogs','planReviews','planCompletion'].map(c=>
+    database.ref(`${HT_ROOT}/${MONTH_NODE}/${k}/${c}`).once('value').then(s=>s.val()).catch(()=>null)
+  )).then(([logs,pr,pc])=>{
+    _arr(logs).forEach(l=>{ if(l&&l.id) window._schExtLogCache[String(l.id)]=l; });
+    Object.assign(window._extPlanReviews,_obj(pr));
+    Object.assign(window._extPlanCompletion,_obj(pc));
+    _planExtraLoaded[k]=true;
+    try{ if(document.getElementById('p-plan')?.classList.contains('active')&&parseInt(planMonth)===m&&parseInt(planYear)===y) renderPlan(); }catch(e){}
+  }).catch(()=>{ delete _planExtraLoaded[k]; });
+}
+function _planReviewLookup(key){
+  const a=(DB.planReviews||{})[key];
+  if(a&&Object.keys(a).length)return a;
+  return (window._extPlanReviews||{})[key]||null;
+}
+async function _saveReviewToExtLog(log,review){
+  try{
+    const dp=_planLogDateParts(log);
+    const k=_mkey(dp.month||planMonth,dp.year||planYear);
+    const id=String(log.id).replace(/[.#$\[\]/]/g,'_');
+    const upd={review:sanitizeForFirebase(review),updatedAt:Date.now()};
+    if(review.type==='stnd'){upd.diemTong=review.total;upd.xepLoai=review.xl;}
+    await database.ref(`${HT_ROOT}/${MONTH_NODE}/${k}/dailyLogs/${id}`).update(upd);
+    Object.assign(log,upd,{review});
+    if(window._schExtLogCache)window._schExtLogCache[String(log.id)]=log;
+    try{
+      if(!DB.notifications)DB.notifications=[];
+      const owner=(DB.users||[]).find(u=>u.storeId===log.storeId&&u.role!=='admin');
+      DB.notifications.unshift({id:'ndg_'+Date.now()+'_'+Math.random().toString(36).slice(2,5),type:'danhgia',
+        message:`${curUser?.name||'Quản lý MKT'} vừa đánh giá báo cáo ${cname(log.categoryId)} ngày ${log.date||''}`,
+        storeId:log.storeId,targetUserId:owner?.id||null,reportId:log.id,reviewData:review,timestamp:Date.now(),isRead:false});
+      await database.ref(`${HT_ROOT}/notifications`).set((DB.notifications||[]).slice(0,300));
+    }catch(e){}
+    return true;
+  }catch(e){
+    console.error('Lưu đánh giá vào báo cáo tháng khác lỗi:',e);
+    toast('⚠️ Lưu đánh giá thất bại: '+(e?.message||'lỗi không rõ'),'err');
+    return false;
+  }
+}
 async function savePlanReview(sid,day,ch,type){
   const log=findPlanRelatedLog(sid,day,ch,planMonth,planYear);
   const note=document.getElementById('prv-note')?.value||'';
@@ -8878,6 +8939,17 @@ async function savePlanReview(sid,day,ch,type){
     const passEl=document.querySelector('input[name="prv-pf"]:checked');
     if(!passEl){toast('Vui lòng chọn Đạt hoặc Không đạt!','warn');return;}
     review={type:'passfail',pass:passEl.value==='pass',note,reviewedBy:curUser?.name||'Admin',reviewedAt:Date.now(),planKey:getPlanReviewKey(sid,day,ch)};
+  }
+  if(log&&(DB.dailyLogs||[]).findIndex(x=>String(x.id)===String(log.id))<0){
+    // Báo cáo thuộc tháng khác "Tháng báo cáo" đang chọn (nạp riêng từ Firebase) → ghi đánh giá thẳng vào báo cáo đó
+    const ok=await _saveReviewToExtLog(log,review);
+    if(!ok)return;
+    document.getElementById('rv-ov')?.remove();
+    document.getElementById('plan-report-detail-ov')?.remove();
+    toast('✅ Đã lưu đánh giá!','ok');
+    if(typeof renderPlan==='function'&&document.getElementById('p-plan')?.classList.contains('active'))renderPlan();
+    if(_planModalSid&&_planModalDay&&document.getElementById('plan-day-modal-ov')?.classList.contains('open'))openPlanDayModal(_planModalSid,_planModalDay);
+    return;
   }
   if(log){
     const idx=(DB.dailyLogs||[]).findIndex(x=>String(x.id)===String(log.id));
@@ -8895,6 +8967,7 @@ async function savePlanReview(sid,day,ch,type){
   }else{
     if(!DB.planReviews||Array.isArray(DB.planReviews))DB.planReviews={};
     DB.planReviews[getPlanReviewKey(sid,day,ch,planMonth,planYear)]={...review,source:'planOnly',sid,day,ch,month:planMonth,year:planYear,content:_getPlanTaskInfo(sid,day,ch).content||''};
+    window._extPlanReviews[getPlanReviewKey(sid,day,ch,planMonth,planYear)]=DB.planReviews[getPlanReviewKey(sid,day,ch,planMonth,planYear)];
   }
   await saveDB();
   document.getElementById('rv-ov')?.remove();
@@ -9006,7 +9079,7 @@ function getScheduleReviewStatus(scheduleId){
   const p=(sch?.ngayDuKien||'').split('-');
   const y=parseInt(p[0])||planYear, m=parseInt(p[1])||planMonth;
   const key=getScheduleReviewKey(scheduleId,m,y);
-  const pr=(DB.planReviews||{})[key];
+  const pr=_planReviewLookup(key);
   if(pr&&Object.keys(pr).length){
     return{reviewed:true,source:'planReviews',log:null,review:pr,scoreText:_reviewScoreText(pr)};
   }
@@ -9097,6 +9170,7 @@ async function saveScheduleReview(scheduleId){
   const key=getScheduleReviewKey(scheduleId,m,y);
   if(!DB.planReviews||Array.isArray(DB.planReviews))DB.planReviews={};
   DB.planReviews[key]={...review,source:'scheduleOnly',scheduleId,storeId:sch.storeId,month:m,year:y,content:sch.chuDe||sch.noiDung||sch.title||''};
+  window._extPlanReviews[key]=DB.planReviews[key];
   if(!DB.notifications)DB.notifications=[];
   const owner=DB.users.find(u=>u.storeId===sch.storeId&&u.role!=='admin');
   DB.notifications.unshift({
@@ -9631,6 +9705,7 @@ function deleteSinglePlanTask(sid, day, taskIndex){
 }
 
 function renderPlan(){
+  try{ _planExtraEnsure(planMonth,planYear); }catch(e){}
   if(!DB.planCompletion)DB.planCompletion={};
   if(!DB.planTargets)DB.planTargets={};
   if(!DB.masterPlans)DB.masterPlans={};
@@ -13129,10 +13204,7 @@ function exportAdsExcel() {
     const gm = document.getElementById('globalMonth');
     curMonth = (m!==undefined && m!==null && m!=='') ? parseInt(m) : (parseInt(gm && gm.value) || curMonth);
     if(y!==undefined && y!==null && y!=='') curYear = parseInt(y)||curYear;
-    if(admin()){
-      DB.settings = DB.settings || {}; DB.settings.month = curMonth; DB.settings.year = curYear;
-      try{ await database.ref(`${HT_ROOT}/settings`).update({month:curMonth, year:curYear}); }catch(e){ console.warn('settings month update skipped:', e?.message || e); }
-    }
+    _setViewerMonth(curMonth,curYear); // chỉ lưu cho tab này, không đổi tháng của người khác
     await loadMonthData(curMonth,curYear,false);
     buildMonthSelector();
     if(!_dashViewMonthManual){ dashViewMonth = curMonth; dashViewYear = curYear; }
@@ -14599,7 +14671,7 @@ if (_overdueOv) {
       if(deptPlansRoot2.val()) DB.deptPlans=arr(deptPlansRoot2.val());
       normalizeDB();
       try{ await htMigrateSchedulesToMonthNode(); }catch(e){ console.warn('Migrate schedules to MONTH_NODE skipped:', e?.message||e); }
-      curMonth=DB.settings.month||curMonth; curYear=DB.settings.year||curYear;
+      { const _vm=_viewerMonth(); curMonth=_vm.m; curYear=_vm.y; }
       if(typeof _dashViewMonthManual !== 'undefined' && !_dashViewMonthManual){ dashViewMonth=curMonth; dashViewYear=curYear; }
       fillRegisterStores(); buildMonthSelector(); const gm=document.getElementById('globalMonth'); if(gm) gm.value=curMonth;
       _staticLoaded=true; _bindStaticRealtime();
